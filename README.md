@@ -1,5 +1,7 @@
 # Atum — Computer Activity + Body / Hand / Face Motion Capture
 
+![Python application](https://github.com/danicsantsa/ThouthAI/actions/workflows/python-app.yml/badge.svg)
+
 **Professional activity tracking and motion capture for Windows, macOS, and Linux**
 
 This application combines:
@@ -15,38 +17,43 @@ This application combines:
 ## Quick Start
 
 ### Windows
-1. Download `Atum_installer.exe` from [Releases](https://github.com/yourname/atum/releases)
+
+1. Download `Atum_installer.exe` from Releases
 2. Run the installer
 3. Search for "Atum" in Start Menu and click to launch
 
 ### macOS
-1. Download `Atum.dmg` from [Releases](https://github.com/yourname/atum/releases)
+
+1. Download `Atum.dmg` from Releases
 2. Double-click to mount, then drag `Atum.app` to Applications
 3. Launch from Applications or Spotlight (⌘+Space, type "Atum")
 
 ### Linux (Ubuntu/Debian)
+
 ```bash
 curl -sSL https://your-domain.com/install-atum.sh | bash
 ```
-Or download `.deb` package and install with:
+
+Or download the `.deb` package and install with:
+
 ```bash
 sudo dpkg -i atum_*.deb
 ```
 
 ## Features
 
-✨ **User-Friendly**
+**✨ User-Friendly**
 - One-click setup wizard
 - Auto-detects your camera
 - Works immediately after installation
 
-🔧 **Powerful**
+**🔧 Powerful**
 - Real-time motion capture
 - Comprehensive activity logging
 - Professional data export (CSV, Database)
 - Work/non-work classification
 
-🌍 **Cross-Platform**
+**🌍 Cross-Platform**
 - Windows (7+)
 - macOS (10.12+)
 - Linux (Ubuntu, Debian, Fedora)
@@ -64,40 +71,40 @@ sudo dpkg -i atum_*.deb
 
 ### Install from Source
 
-**Requirements:**
+Requirements:
 - Python 3.8 or higher
 - 500 MB disk space
 - Webcam (optional, required for motion tracking)
 
 **Linux:**
 ```bash
-git clone https://github.com/yourname/atum.git
-cd atum
+git clone https://github.com/danicsantsa/ThouthAI.git
+cd ThouthAI
 chmod +x build/install_linux.sh
 ./build/install_linux.sh
 ```
 
 **macOS:**
 ```bash
-git clone https://github.com/yourname/atum.git
-cd atum
+git clone https://github.com/danicsantsa/ThouthAI.git
+cd ThouthAI
 chmod +x build/install_macos.sh
 ./build/install_macos.sh
 ```
 
 **Windows:**
 ```cmd
-git clone https://github.com/yourname/atum.git
-cd atum
+git clone https://github.com/danicsantsa/ThouthAI.git
+cd ThouthAI
 build\install_windows.bat
 ```
 
-Or manually:
+**Or manually:**
 
 ```bash
 # Clone and navigate
-git clone https://github.com/yourname/atum.git
-cd atum
+git clone https://github.com/danicsantsa/ThouthAI.git
+cd ThouthAI
 
 # Create virtual environment
 python3 -m venv venv
@@ -115,7 +122,7 @@ pip install -r requirements.txt
 python atum.py
 ```
 
-## Building Installers
+### Building Installers
 
 To build installers for distribution:
 
@@ -127,11 +134,12 @@ pip install pyinstaller pillow
 python build/build.py
 ```
 
-Output installers will be in `dist/` directory.
+Output installers will be in the `dist/` directory.
 
 ## Requirements
 
 ### Python Packages
+
 - `opencv-python` ≥ 4.8.0 — Video capture and image processing
 - `mediapipe` == 0.10.14 — Body/face/hand detection (⚠️ use exactly this version)
 - `psycopg2-binary` ≥ 2.9.0 — PostgreSQL database connection
@@ -155,12 +163,13 @@ sudo dnf install python3-tkinter python3-devel openssl-devel
 brew install python3 openssl
 ```
 
-### Important Notes
+## Important Notes
+
 - **MediaPipe version:** Do NOT use MediaPipe 1.0.1+ — it's missing the `mp.solutions` API
 - **Python version:** Python 3.8+ required
 - **Camera:** Optional; app works without camera for activity tracking only
 
-## Run the application
+## Run the Application
 
 ```bash
 # Quick start from anywhere (if installed)
@@ -170,9 +179,18 @@ atum
 python atum.py
 ```
 
+## Testing
+
+```bash
+pytest --ignore=test_camera_integration.py
+```
+
+`test_camera_integration.py` is a manual diagnostic script requiring physical camera hardware, so it's excluded from automated runs. Continuous integration is configured via GitHub Actions ([`.github/workflows/python-app.yml`](.github/workflows/python-app.yml)) and runs `flake8` linting plus the `pytest` suite in `tests/` on every push and pull request to `main`.
+
 ## Technical Architecture
 
 **Data Flow:**
+
 ```
 Camera Input ──┐
                ├─→ Motion Detection (MediaPipe) ──┐
@@ -188,10 +206,10 @@ Keyboard/Mouse ────→ Touch Detector         ──────┘
 - Real-time batch flushing for performance
 
 **Detection Pipelines:**
-- **Pose:** Full body skeleton detection (33 keypoints)
-- **Face:** 468 facial landmarks with expression inference
-- **Hand:** Per-hand detection (21 keypoints × 2 hands)
-- **Activity:** Window title parsing + ML classification
+- Pose: Full body skeleton detection (33 keypoints)
+- Face: 468 facial landmarks with expression inference
+- Hand: Per-hand detection (21 keypoints × 2 hands)
+- Activity: Window title parsing + ML classification
 
 ## Notes
 
@@ -203,22 +221,22 @@ Keyboard/Mouse ────→ Touch Detector         ──────┘
 
 ## Troubleshooting
 
-### App won't launch
-- **Windows:** Make sure Python was installed with "Add to PATH" enabled
-- **macOS:** Use "Open" from right-click menu if security prompt appears
-- **Linux:** Check that Python 3 and tkinter are installed
+**App won't launch**
+- Windows: Make sure Python was installed with "Add to PATH" enabled
+- macOS: Use "Open" from right-click menu if security prompt appears
+- Linux: Check that Python 3 and tkinter are installed
 
-### Camera not detected
+**Camera not detected**
 - Ensure camera is connected and not in use by another app
 - Try refreshing camera list in Settings
 - App works without camera (activity tracking only)
 
-### High CPU usage
+**High CPU usage**
 - Reduce resolution in Settings
 - Lower detection frequency
 - Disable pose/face/hand tracking if not needed
 
-### Database connection fails
+**Database connection fails**
 - CSV logging continues automatically
 - Check `db_config.json` credentials
 - Database is optional
@@ -236,6 +254,7 @@ This application is suitable for:
 ## Contributing
 
 Contributions are welcome! Please:
+
 1. Fork the repository
 2. Create a feature branch
 3. Test on all platforms
@@ -247,10 +266,10 @@ This project is provided as-is. Please see LICENSE file for details.
 
 ## Support
 
-- 📖 [Full Documentation](https://github.com/yourname/atum/wiki)
-- 🐛 [Report Issues](https://github.com/yourname/atum/issues)
-- 💬 [Discussions](https://github.com/yourname/atum/discussions)
+- 📖 Full Documentation
+- 🐛 Report Issues
+- 💬 Discussions
 
 ---
 
-**Made with ❤️ for activity tracking and motion capture**
+*Made with ❤️ for activity tracking and motion capture*
