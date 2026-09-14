@@ -1,0 +1,157 @@
+<div style="background: var(--surface-0); border-radius: 12px; border: 0.5px solid var(--border); overflow: hidden; font-size: 13px;">
+  <h2 class="sr-only">Wireframe einer Datenerfassungs-Software für spätere Datenanalyse: manueller Start/Stopp mit Aufnahmedauer, mehrere Hardware-Quellen wie Kamera, Temperatur, GPS und Gewicht, sowie eine Tabelle erfasster Datensätze zum Export.</h2>
+
+  <!-- Top bar -->
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:0.5px solid var(--border); background: var(--surface-2);">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <i class="ti ti-database" style="font-size:18px; color:var(--text-accent);" aria-hidden="true"></i>
+      <span style="font-weight:500; font-size:14px;">CaptureSuite — Datenerfassung</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <div style="display:flex; align-items:center; gap:6px; padding:4px 10px; border-radius:var(--radius); background:var(--bg-success);">
+        <i class="ti ti-shield-check" style="font-size:14px; color:var(--text-success);" aria-hidden="true"></i>
+        <span style="color:var(--text-success); font-size:12px;">TLS gesichert</span>
+      </div>
+      <div style="width:28px; height:28px; border-radius:50%; background:var(--bg-accent); display:flex; align-items:center; justify-content:center; font-weight:500; color:var(--text-accent); font-size:12px;">JD</div>
+    </div>
+  </div>
+
+  <div style="display:flex; min-height:230px;">
+    <!-- Hardware sources sidebar -->
+    <div style="width:180px; border-right:0.5px solid var(--border); padding:14px 10px; display:flex; flex-direction:column; gap:8px;">
+      <span style="font-weight:500; font-size:12px; color:var(--text-secondary); padding:0 2px;">Hardware-Quellen</span>
+
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:7px 8px; border-radius:var(--radius); background:var(--fill-ghost-selected);">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <i class="ti ti-camera" style="font-size:14px;" aria-hidden="true"></i>
+          <span style="font-size:12px;">Kamera 01</span>
+        </div>
+        <span style="width:6px; height:6px; border-radius:50%; background:var(--text-success);"></span>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:7px 8px; border-radius:var(--radius);">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <i class="ti ti-temperature" style="font-size:14px;" aria-hidden="true"></i>
+          <span style="font-size:12px;">Temperatur</span>
+        </div>
+        <span style="width:6px; height:6px; border-radius:50%; background:var(--text-success);"></span>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:7px 8px; border-radius:var(--radius);">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <i class="ti ti-map-pin" style="font-size:14px;" aria-hidden="true"></i>
+          <span style="font-size:12px;">GPS</span>
+        </div>
+        <span style="width:6px; height:6px; border-radius:50%; background:var(--text-success);"></span>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:7px 8px; border-radius:var(--radius); opacity:0.55;">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <i class="ti ti-weight" style="font-size:14px;" aria-hidden="true"></i>
+          <span style="font-size:12px;">Waage</span>
+        </div>
+        <span style="width:6px; height:6px; border-radius:50%; background:var(--text-muted);"></span>
+      </div>
+      <button style="margin-top:4px; font-size:12px;"><i class="ti ti-plus" style="font-size:13px; margin-right:4px;" aria-hidden="true"></i>Quelle hinzufügen</button>
+    </div>
+
+    <!-- Main capture area -->
+    <div style="flex:1; padding:16px; display:flex; gap:16px;">
+      <!-- Camera thumbnail, small - it's just one source now -->
+      <div style="width:190px; display:flex; flex-direction:column; gap:8px;">
+        <div style="background:#1a1a1a; border-radius:var(--radius); aspect-ratio:4/3; position:relative;">
+          <i class="ti ti-video" style="font-size:22px; color:#666; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);" aria-hidden="true"></i>
+          <span style="position:absolute; top:6px; left:6px; font-size:10px; color:#fff; background:rgba(0,0,0,0.5); padding:2px 6px; border-radius:var(--radius);">Kamera 01</span>
+        </div>
+        <p style="margin:0; font-size:11px; color:var(--text-muted);">Bild-/Video-Feld dieser Erfassung</p>
+      </div>
+
+      <!-- Capture control: the real focus -->
+      <div style="flex:1; display:flex; flex-direction:column; gap:12px;">
+        <p style="font-weight:500; margin:0;">Neue Erfassung</p>
+
+        <div style="background:var(--surface-1); border-radius:var(--radius); padding:16px; display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <p style="margin:0 0 2px; font-size:12px; color:var(--text-secondary);">Aufnahmedauer</p>
+            <p style="margin:0; font-size:26px; font-weight:500; font-variant-numeric:tabular-nums;">00:00:00</p>
+          </div>
+          <button style="border:2px solid var(--border-accent); font-weight:500; padding:10px 20px;">
+            <i class="ti ti-player-record" style="font-size:14px; margin-right:6px; color:var(--text-danger);" aria-hidden="true"></i>Start
+          </button>
+        </div>
+
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
+          <div style="background:var(--surface-1); border-radius:var(--radius); padding:10px;">
+            <p style="margin:0 0 2px; font-size:11px; color:var(--text-secondary);"><i class="ti ti-temperature" style="font-size:12px; vertical-align:-1px; margin-right:3px;" aria-hidden="true"></i>Temperatur</p>
+            <p style="margin:0; font-size:15px; font-weight:500;">21.4 °C</p>
+          </div>
+          <div style="background:var(--surface-1); border-radius:var(--radius); padding:10px;">
+            <p style="margin:0 0 2px; font-size:11px; color:var(--text-secondary);"><i class="ti ti-map-pin" style="font-size:12px; vertical-align:-1px; margin-right:3px;" aria-hidden="true"></i>GPS</p>
+            <p style="margin:0; font-size:15px; font-weight:500;">52.52, 13.40</p>
+          </div>
+          <div style="background:var(--surface-1); border-radius:var(--radius); padding:10px; opacity:0.5;">
+            <p style="margin:0 0 2px; font-size:11px; color:var(--text-secondary);"><i class="ti ti-weight" style="font-size:12px; vertical-align:-1px; margin-right:3px;" aria-hidden="true"></i>Waage</p>
+            <p style="margin:0; font-size:15px; font-weight:500;">—</p>
+          </div>
+        </div>
+
+        <div>
+          <label style="display:block; font-size:12px; color:var(--text-secondary); margin-bottom:4px;">Tag / Kategorie</label>
+          <input type="text" placeholder="z.B. Charge-2026-09" style="width:100%;" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Records table -->
+  <div style="border-top:0.5px solid var(--border); padding:14px 16px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+      <p style="font-weight:500; margin:0;">Erfasste Datensätze</p>
+      <button style="font-size:12px;"><i class="ti ti-download" style="font-size:13px; margin-right:4px;" aria-hidden="true"></i>Als CSV exportieren</button>
+    </div>
+    <table style="width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed;">
+      <thead>
+        <tr style="color:var(--text-secondary); text-align:left;">
+          <th style="font-weight:400; padding:6px 4px; border-bottom:0.5px solid var(--border); width:16%;">ID</th>
+          <th style="font-weight:400; padding:6px 4px; border-bottom:0.5px solid var(--border); width:20%;">Zeitstempel</th>
+          <th style="font-weight:400; padding:6px 4px; border-bottom:0.5px solid var(--border); width:12%;">Dauer</th>
+          <th style="font-weight:400; padding:6px 4px; border-bottom:0.5px solid var(--border); width:14%;">Temp.</th>
+          <th style="font-weight:400; padding:6px 4px; border-bottom:0.5px solid var(--border); width:14%;">Tag</th>
+          <th style="font-weight:400; padding:6px 4px; border-bottom:0.5px solid var(--border); width:12%;">Sync</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:6px 4px; border-bottom:0.5px solid var(--border); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">REC-0092</td>
+          <td style="padding:6px 4px; border-bottom:0.5px solid var(--border);">03.09 14:22</td>
+          <td style="padding:6px 4px; border-bottom:0.5px solid var(--border);">00:14</td>
+          <td style="padding:6px 4px; border-bottom:0.5px solid var(--border);">21.4 °C</td>
+          <td style="padding:6px 4px; border-bottom:0.5px solid var(--border); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Charge-09</td>
+          <td style="padding:6px 4px; border-bottom:0.5px solid var(--border);"><i class="ti ti-cloud-check" style="font-size:13px; color:var(--text-success);" aria-hidden="true"></i></td>
+        </tr>
+        <tr>
+          <td style="padding:6px 4px; border-bottom:0.5px solid var(--border); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">REC-0091</td>
+          <td style="padding:6px 4px; border-bottom:0.5px solid var(--border);">03.09 14:19</td>
+          <td style="padding:6px 4px; border-bottom:0.5px solid var(--border);">00:09</td>
+          <td style="padding:6px 4px; border-bottom:0.5px solid var(--border);">21.3 °C</td>
+          <td style="padding:6px 4px; border-bottom:0.5px solid var(--border); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Charge-09</td>
+          <td style="padding:6px 4px; border-bottom:0.5px solid var(--border);"><i class="ti ti-clock" style="font-size:13px; color:var(--text-warning);" aria-hidden="true"></i></td>
+        </tr>
+        <tr>
+          <td style="padding:6px 4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">REC-0090</td>
+          <td style="padding:6px 4px;">03.09 14:15</td>
+          <td style="padding:6px 4px;">00:21</td>
+          <td style="padding:6px 4px;">21.1 °C</td>
+          <td style="padding:6px 4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Charge-08</td>
+          <td style="padding:6px 4px;"><i class="ti ti-cloud-check" style="font-size:13px; color:var(--text-success);" aria-hidden="true"></i></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Status bar -->
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 16px; border-top:0.5px solid var(--border); background:var(--surface-2); font-size:12px; color:var(--text-secondary);">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <span><i class="ti ti-database" style="font-size:14px; vertical-align:-2px; margin-right:4px;" aria-hidden="true"></i>142 Datensätze lokal</span>
+      <span><i class="ti ti-cloud-check" style="font-size:14px; vertical-align:-2px; margin-right:4px;" aria-hidden="true"></i>1 ausstehend</span>
+    </div>
+    <span><i class="ti ti-fingerprint" style="font-size:14px; vertical-align:-2px; margin-right:4px;" aria-hidden="true"></i>Angemeldet als jdoe@firma.de</span>
+  </div>
+</div>

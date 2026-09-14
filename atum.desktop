@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Atum
+Comment=Computer activity and motion capture monitoring
+Exec=/home/danicsantsa/Computervision/run_monitor_app.sh
+Path=/home/danicsantsa/Computervision
+Icon=/home/danicsantsa/Computervision/atum.png
+Terminal=false
+Categories=Utility;Science;Graphics;
+StartupNotify=true
+StartupWMClass=Atum

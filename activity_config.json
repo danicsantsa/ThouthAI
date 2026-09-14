@@ -1,0 +1,23 @@
+{
+  "work_apps": [
+    "code",
+    "pycharm",
+    "firefox",
+    "chrome",
+    "terminal",
+    "slack",
+    "word",
+    "excel",
+    "outlook"
+  ],
+  "non_work_apps": [
+    "spotify",
+    "steam",
+    "netflix",
+    "youtube",
+    "discord",
+    "instagram",
+    "tiktok",
+    "vlc"
+  ]
+}

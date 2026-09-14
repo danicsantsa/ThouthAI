@@ -1,0 +1,41 @@
+# Secrets and local configuration
+db_config.json
+gui_settings.json
+.env
+.env.*
+
+# Local runtime data
+recorded_videos/
+camera_preview.png
+*.csv
+*.mp4
+*.mp4.part.mp4
+
+# Python environments and caches
+myenv/
+tracking_env/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Build output
+dist/
+build/atum/
+build/*.toc
+build/*.pyz
+build/warn-*.txt
+build/xref-*.html
+*.spec.bak
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+
+# Local logs and generated exports
+*.log
+*.tmp
+
+# Unrelated personal/reference documents
+20201222_5004-b00-010201_web.pdf

@@ -1,0 +1,30 @@
+# Atum - Activity Tracking Application
+# Core dependencies
+
+# Computer Vision
+opencv-python>=4.8.0
+mediapipe==0.10.14
+numpy>=1.24.0
+
+# Database & Data
+psycopg2-binary>=2.9.0
+pandas>=1.5.0
+sqlalchemy>=2.0.0
+
+# GUI
+PySide6>=6.6.0
+matplotlib>=3.7.0
+pillow>=9.5.0
+
+# Utilities
+requests>=2.31.0
+python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# Optional: For better performance
+numba>=0.57.0
+
+# Development/Testing (optional)
+pytest>=7.0.0
+black>=23.0.0
+pylint>=2.17.0
