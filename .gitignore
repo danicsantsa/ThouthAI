@@ -39,3 +39,33 @@ build/xref-*.html
 
 # Unrelated personal/reference documents
 20201222_5004-b00-010201_web.pdf
+
+cat > .gitignore << 'EOF'
+# Virtuelle Umgebungen
+tracking_env/
+myenv/
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Build-Artefakte
+build/
+dist/
+
+# Generierte Daten/Logs
+*.csv
+recorded_videos/
+camera_preview.png
+
+# Konfiguration mit möglichen Zugangsdaten
+db_config.json
+
+# Modell-Dateien (ggf. groß, Git LFS verwenden)
+*.task
+*.tflite
+EOF
+
+git add .gitignore
+git commit -m "Add .gitignore"
+git push
