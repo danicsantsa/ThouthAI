@@ -65,6 +65,9 @@ jobs:
 
       - name: Build installer
         run: python build/build.py
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
 
       # --- Linux: archive onedir folder so it isn't uploaded file-by-file ---
       - name: Archive onedir build (Linux)

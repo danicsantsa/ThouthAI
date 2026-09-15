@@ -12,6 +12,15 @@ import shutil
 import json
 from pathlib import Path
 
+# Windows consoles default to cp1252, which can't encode the emoji used in
+# this script's log output. Force UTF-8 so prints don't crash the build.
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except AttributeError:
+        pass  # Python < 3.7 fallback, not expected here
+
 # Configuration
 PROJECT_NAME = "Atum"
 VERSION = "1.0.0"
