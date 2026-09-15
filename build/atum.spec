@@ -63,13 +63,16 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# --- One-dir mode ---
+# EXE now only builds the bootstrap executable; binaries/zipfiles/datas are
+# excluded here and instead collected into a folder by COLLECT below.
+# This keeps dist/Atum as a directory (containing the exe + libs + datas),
+# which is what build.py's shutil.copytree(...) expects for AppImage packaging.
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='Atum',
     debug=False,
     bootloader_ignore_signals=False,
@@ -84,10 +87,21 @@ exe = EXE(
     icon=icon_path,
 )
 
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='Atum',
+)
+
 # For macOS app bundle
 if sys.platform == 'darwin':
     app = BUNDLE(
-        exe,
+        coll,
         name='Atum.app',
         icon=mac_icon_path,
         bundle_identifier='com.atum.tracking',
