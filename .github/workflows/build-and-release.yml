@@ -10,7 +10,18 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: atum-linux
+          - os: windows-latest
+            artifact_name: atum-windows
+          - os: macos-latest
+            artifact_name: atum-macos
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -23,9 +34,16 @@ jobs:
           python-version: "3.10"
 
       - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1 libxkbcommon-x11-0 libxcb-cursor0 libegl1
+          sudo apt-get install -y libgl1 libxkbcommon-x11-0 libxcb-cursor0 libegl1 dpkg-dev
+
+      - name: Install appimagetool (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O /usr/local/bin/appimagetool
+          chmod +x /usr/local/bin/appimagetool
 
       - name: Install Python dependencies
         run: |
@@ -34,9 +52,10 @@ jobs:
           pip install pyinstaller pillow
 
       - name: Verify LFS files were pulled correctly
+        shell: bash
         run: |
           for f in efficientdet.tflite face_landmarker.task hand_landmarker.task pose_landmarker_lite.task; do
-            size=$(stat -c%s "$f")
+            size=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f")
             echo "$f: $size bytes"
             if [ "$size" -lt 1000 ]; then
               echo "ERROR: $f looks like an LFS pointer, not the real file!"
@@ -47,25 +66,52 @@ jobs:
       - name: Build installer
         run: python build/build.py
 
-      - name: Archive onedir build
+      # --- Linux: archive onedir folder so it isn't uploaded file-by-file ---
+      - name: Archive onedir build (Linux)
+        if: matrix.os == 'ubuntu-latest'
         run: |
           cd dist
           tar -czf Atum-linux-x86_64.tar.gz Atum/
 
+      # --- Windows: zip onedir folder (in case no NSIS installer was produced) ---
+      - name: Archive onedir build (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          cd dist
+          if (Test-Path Atum) {
+            Compress-Archive -Path Atum -DestinationPath Atum-windows-x86_64.zip
+          }
+
+      # --- macOS: zip the .app bundle if no DMG was produced ---
+      - name: Archive onedir build (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cd dist
+          if [ -d "Atum.app" ]; then
+            zip -r -y Atum-macos-x86_64.zip Atum.app
+          elif [ -d "Atum" ]; then
+            zip -r -y Atum-macos-x86_64.zip Atum
+          fi
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: atum-linux
+          name: ${{ matrix.artifact_name }}
           path: |
             dist/*.deb
             dist/*.AppImage
-            dist/Atum-linux-x86_64.tar.gz
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.dmg
+            dist/*.exe
+          if-no-files-found: warn
 
   release:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -77,4 +123,8 @@ jobs:
             artifacts/atum-linux/*.deb
             artifacts/atum-linux/*.AppImage
             artifacts/atum-linux/Atum-linux-x86_64.tar.gz
+            artifacts/atum-windows/*.exe
+            artifacts/atum-windows/Atum-windows-x86_64.zip
+            artifacts/atum-macos/*.dmg
+            artifacts/atum-macos/Atum-macos-x86_64.zip
           generate_release_notes: true
