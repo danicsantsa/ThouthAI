@@ -18,7 +18,6 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-        
           python-version: "3.10"
 
       - name: Install Linux system dependencies
@@ -35,11 +34,19 @@ jobs:
       - name: Build installer
         run: python build/build.py
 
+      - name: Archive onedir build
+        run: |
+          cd dist
+          tar -czf Atum-linux-x86_64.tar.gz Atum/
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: atum-linux
-          path: dist/*
+          path: |
+            dist/*.deb
+            dist/*.AppImage
+            dist/Atum-linux-x86_64.tar.gz
 
   release:
     needs: build
@@ -53,5 +60,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          files: |
+            artifacts/atum-linux/*.deb
+            artifacts/atum-linux/*.AppImage
+            artifacts/atum-linux/Atum-linux-x86_64.tar.gz
           generate_release_notes: true
