@@ -29,7 +29,7 @@ Section "Install"
   SetOutPath "$INSTDIR"
   
   ; Copy executable and files
-  File "..\dist\${APP_EXECUTABLE}"
+  File /r "..\dist\Atum\*.*"
   File "..\workspace-tracking-icon.png"
   File "..\gui_settings.json"
   File "..\db_config.json"
