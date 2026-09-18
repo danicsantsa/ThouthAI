@@ -26,6 +26,18 @@ create table if not exists recording_sessions (
     notes text
 );
 
+-- Modus der Sitzung: Standard, Fokus oder Hyperfocus. Das erlaubt das spätere
+-- Auswerten, ob eine Sitzung im fokussierten oder ablenkungsarmen Modus lief.
+create table if not exists session_modes (
+    id bigserial primary key,
+    user_id uuid references users(id) on delete cascade,
+    recording_session_id uuid references recording_sessions(id) on delete cascade,
+    mode text not null check (mode in ('standard', 'focus', 'hyperfocus')),
+    started_at timestamptz not null default now(),
+    ended_at timestamptz,
+    notes text
+);
+
 -- Zentraler Katalog aller bekannten Apps (statt App-Namen als freien Text
 -- überall zu wiederholen). Eine Zeile pro einzigartiger App.
 create table if not exists applications (
@@ -239,3 +251,4 @@ create index if not exists idx_face_session on face_data (recording_session_id, 
 create index if not exists idx_hand_session on hand_data (recording_session_id, t_ms);
 create index if not exists idx_environment_session on environment_readings (recording_session_id, timestamp);
 create index if not exists idx_recording_sessions_user on recording_sessions (user_id, started_at);
+create index if not exists idx_session_modes_session on session_modes (recording_session_id, started_at);

@@ -60,6 +60,7 @@ from psycopg2.extras import Json, execute_values
 
 import db_client
 import activity_tracker as at  # wiederverwendete Hilfsfunktionen (D-Bus, Klassifizierung, Konfiguration)
+from session_mode_logic import evaluate_session_mode
 
 
 RESOURCE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -67,6 +68,7 @@ OUTPUT_DIR = os.environ.get("ATUM_DATA_DIR", RESOURCE_DIR)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 PREVIEW_IMAGE_PATH = os.path.join(OUTPUT_DIR, "camera_preview.png")
 VIDEO_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "recorded_videos")
+DEFAULT_CAMERA_INDEX = 1 if platform.system() == "Linux" else 0
 
 
 # ===========================================================
@@ -199,7 +201,9 @@ def _none_if_empty(value):
 #          -- läuft im HAUPT-Thread (OpenCV-Fenster brauchen das)
 # ===========================================================
 
-def open_camera(index=0):
+def open_camera(index=None):
+    if index is None:
+        index = DEFAULT_CAMERA_INDEX
     system = platform.system()
     if system == "Windows":
         cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
@@ -258,7 +262,7 @@ WORKPLACE_OBJECTS = [
 ]
 
 
-def camera_worker(user_id, session_id, db_writer, stop_event, args, results):
+def camera_worker(user_id, session_id, db_writer, stop_event, args, results, runtime_state):
     """Läuft im Hauptthread. Füllt `results` (dict) am Ende mit den
     Touch-Zusammenfassungsdaten, damit main() sie nach dem Join ausgeben kann."""
 
@@ -598,6 +602,9 @@ def camera_worker(user_id, session_id, db_writer, stop_event, args, results):
                         cv2.putText(frame, "in Benutzung", (x, y + h + 20),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
 
+                    category_name = category.category_name.lower()
+                    if "cell phone" in category_name or "phone" in category_name:
+                        runtime_state["phone_detected"] = True
                     row = [frame_timestamp, obj_idx, category.category_name, category.score,
                            x, y, w, h, horizontal_pos, relative_size, hand_nearby]
                     object_writer.writerow(row)
@@ -671,7 +678,7 @@ def camera_worker(user_id, session_id, db_writer, stop_event, args, results):
 #          (nutzt Hilfsfunktionen aus activity_tracker.py wieder)
 # ===========================================================
 
-def activity_worker(user_id, session_id, db_writer, stop_event, args, session_clock):
+def activity_worker(user_id, session_id, db_writer, stop_event, args, session_clock, runtime_state):
     if not at.activity_tracking_available():
         print("[Aktivität] Fenster-/Idle-Tracking ist auf diesem System nicht verfügbar.")
         print("[Aktivität] Betriebssystem/Plattform wird als Nicht-Linux oder ohne GNOME-Integration erkannt.")
@@ -697,6 +704,7 @@ def activity_worker(user_id, session_id, db_writer, stop_event, args, session_cl
     current_app = None
     current_category = None
     session_start = None
+    focus_state = {"alert": False, "last_alert": None}
 
     from collections import deque
     wechsel_zeitpunkte = deque()
@@ -716,6 +724,25 @@ def activity_worker(user_id, session_id, db_writer, stop_event, args, session_cl
             kategorie = at.classify(info["app_name"], info["fenster_titel"], work_apps, non_work_apps)
             leerlauf = at.get_idle_seconds()
             status = "Leerlauf" if (leerlauf is not None and leerlauf >= at.IDLE_THRESHOLD_SECONDS) else "Aktiv"
+
+            if args.session_mode == "hyperfocus" and args.hyperfocus_app:
+                at.enforce_hyperfocus_app(info["app_name"], args.hyperfocus_app)
+
+            mode_eval = evaluate_session_mode(
+                args.session_mode,
+                kategorie,
+                leerlauf,
+                info["app_name"],
+                allowed_app=args.hyperfocus_app,
+                phone_detected=runtime_state.get("phone_detected", False),
+            )
+            if mode_eval["alert"]:
+                if focus_state["last_alert"] is None or (now - focus_state["last_alert"]).total_seconds() >= 20:
+                    print(f"[Fokus] {args.session_mode}: {mode_eval['reason']} | {mode_eval['recommendation']}")
+                    focus_state["last_alert"] = now
+                focus_state["alert"] = True
+            else:
+                focus_state["alert"] = False
 
             if (leerlauf is not None and vorheriger_leerlauf is not None
                     and leerlauf < vorheriger_leerlauf):
@@ -816,8 +843,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Kombiniertes Kamera- + Aktivitäts-Tracking")
     parser.add_argument("--user", type=str, required=True,
                          help="Name der Test-Person, z.B. --user Danic (wird in der DB angelegt, falls neu)")
-    parser.add_argument("--camera", type=int, default=0,
-                         help="Kamera-Index, z.B. 0 für eingebaute Webcam, 2 für DroidCam")
+    parser.add_argument("--camera", type=int, default=DEFAULT_CAMERA_INDEX,
+                         help="Kamera-Index, z.B. 1 für die primäre Linux-Kamera, 2 für DroidCam")
     parser.add_argument("--rotate", type=int, default=0, choices=[0, 90, 180, 270],
                          help="Bild um X Grad drehen")
     parser.add_argument("--configure", action="store_true",
@@ -832,6 +859,11 @@ def parse_args():
                          help="Wie oft gepufferte Daten in die DB geschrieben werden, in Sekunden (Standard: 2)")
     parser.add_argument("--device-name", type=str, default=None,
                          help="Name für dieses Gerät in der DB (Standard: Hostname)")
+    parser.add_argument("--session-mode", type=str, default="standard",
+                         choices=["standard", "focus", "hyperfocus"],
+                         help="Aktiver Arbeitsmodus der Sitzung: standard, focus oder hyperfocus")
+    parser.add_argument("--hyperfocus-app", type=str, default="",
+                         help="Erlaubte Einzel-App im Hyperfocus-Modus, z.B. code, firefox oder chrome")
     parser.add_argument("--preview-window", action="store_true",
                          help="Zeigt zusätzlich ein eigenes OpenCV-Fenster an; standardmäßig deaktiviert, damit die App keine neue Kamera-Preview-Page öffnet.")
     return parser.parse_args()
@@ -839,6 +871,9 @@ def parse_args():
 
 def main():
     args = parse_args()
+    if args.session_mode == "standard":
+        print("[Modus] Standard-Modus: Kamera und MediaPipe sind deaktiviert.")
+        return
 
     print("Verbinde mit Datenbank...")
     device_name = args.device_name or platform.node()
@@ -849,27 +884,30 @@ def main():
         print("Prüfe db_config.json und deine Internetverbindung. Abbruch.")
         sys.exit(1)
     print(f"Nutzer: {args.user}  (ID: {user_id})")
+    print(f"[Modus] Sitzung läuft im Modus: {args.session_mode}")
 
     session_clock = time.monotonic()
     session_id = db_client.start_recording_session(
         user_id, device_name=device_name,
-        notes="track_all.py")
+        notes=f"track_all.py::{args.session_mode}")
+    db_client.insert_session_mode(user_id, session_id, args.session_mode, notes=f"track_all.py::{args.session_mode}")
     print(f"Aufnahme-Sitzung gestartet: {session_id}")
 
     db_writer = DBWriter(flush_interval=args.db_flush_interval)
     stop_event = threading.Event()
     results = {}
+    runtime_state = {"phone_detected": False}
 
     activity_thread = threading.Thread(
         target=activity_worker,
-        args=(user_id, session_id, db_writer, stop_event, args, session_clock),
+        args=(user_id, session_id, db_writer, stop_event, args, session_clock, runtime_state),
         daemon=True,
     )
     activity_thread.start()
 
     try:
         # Kamera-Loop läuft im Hauptthread (OpenCV-Fenster brauchen das)
-        camera_worker(user_id, session_id, db_writer, stop_event, args, results)
+        camera_worker(user_id, session_id, db_writer, stop_event, args, results, runtime_state)
     except KeyboardInterrupt:
         print("\nStrg+C erkannt, beende sauber...")
     finally:

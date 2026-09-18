@@ -161,7 +161,7 @@ cat > "$START_SCRIPT" << 'EOF'
 #!/bin/bash
 cd "$(dirname "$0")"
 source venv/bin/activate
-python3 tracking_gui.py
+python3 capturesuite_qt_new.py
 EOF
 
 chmod +x "$START_SCRIPT"
@@ -180,7 +180,7 @@ echo "1. Mit Startscript:"
 echo -e "   ${GREEN}cd $INSTALL_DIR && ./start.sh${NC}"
 echo ""
 echo "2. Mit Python direkt:"
-echo -e "   ${GREEN}cd $INSTALL_DIR && source venv/bin/activate && python3 tracking_gui.py${NC}"
+echo -e "   ${GREEN}cd $INSTALL_DIR && source venv/bin/activate && python3 capturesuite_qt_new.py${NC}"
 echo ""
 echo "3. Vom Anwendungsmenü:"
 echo -e "   ${GREEN}Suche nach 'Workspace Tracking' im Menü${NC}"

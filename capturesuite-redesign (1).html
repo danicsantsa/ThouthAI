@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CaptureSuite — Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #14171c;
+    --panel: #1b1f26;
+    --panel-raised: #21262e;
+    --line: #2b313b;
+    --text: #eeece6;
+    --text-muted: #8d94a0;
+    --text-faint: #5c6470;
+    --amber: #d98e3f;
+    --amber-dim: rgba(217,142,63,0.14);
+    --sage: #7ea08f;
+    --sage-dim: rgba(126,160,143,0.14);
+    --danger: #c26a5c;
+    --focus-ring: #d98e3f;
+  }
+  :root:not([data-theme="light"]){ }
+  :root[data-theme="light"]{
+    --bg: #f3f1ec;
+    --panel: #ffffff;
+    --panel-raised: #fbfaf7;
+    --line: #e2ded4;
+    --text: #23211d;
+    --text-muted: #6e6a60;
+    --text-faint: #a29c8e;
+    --amber-dim: rgba(196,120,40,0.12);
+    --sage-dim: rgba(94,130,111,0.14);
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg: #f3f1ec;
+      --panel: #ffffff;
+      --panel-raised: #fbfaf7;
+      --line: #e2ded4;
+      --text: #23211d;
+      --text-muted: #6e6a60;
+      --text-faint: #a29c8e;
+      --amber-dim: rgba(196,120,40,0.12);
+      --sage-dim: rgba(94,130,111,0.14);
+    }
+  }
+
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    min-height: 100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding: 48px 20px 80px;
+  }
+
+  .mono{ font-family: 'IBM Plex Mono', monospace; }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    width: 100%;
+    max-width: 640px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    margin-bottom: 36px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand{
+    display:flex;
+    align-items:baseline;
+    gap: 10px;
+  }
+  .brand-mark{
+    width: 9px; height: 9px;
+    border-radius: 2px;
+    background: var(--amber);
+    display:inline-block;
+    transform: translateY(-1px);
+  }
+  .brand-name{
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .brand-sub{
+    font-size: 12.5px;
+    color: var(--text-faint);
+  }
+  .conn{
+    display:flex;
+    align-items:center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .conn-dot{
+    width:6px;height:6px;border-radius:50%;
+    background: var(--sage);
+    box-shadow: 0 0 0 3px var(--sage-dim);
+  }
+
+  /* ---------- Console panel ---------- */
+  .console{
+    width: 100%;
+    max-width: 640px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  /* segmented mode selector */
+  .modes{
+    display:flex;
+    border-bottom: 1px solid var(--line);
+  }
+  .mode-btn{
+    flex:1;
+    padding: 15px 12px 13px;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    position: relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap: 3px;
+    transition: color .15s ease;
+  }
+  .mode-btn .mode-desc{
+    font-size: 11px;
+    color: var(--text-faint);
+    font-weight: 400;
+  }
+  .mode-btn:not(:last-child){ border-right: 1px solid var(--line); }
+  .mode-btn::after{
+    content:"";
+    position:absolute;
+    left:0; right:0; bottom:-1px;
+    height: 2px;
+    background: transparent;
+  }
+  .mode-btn:hover{ color: var(--text); }
+  .mode-btn.active{ color: var(--text); }
+  .mode-btn.active::after{ background: var(--amber); }
+  .mode-btn:focus-visible{ outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+
+  /* status readout */
+  .readout{
+    padding: 28px 28px 22px;
+  }
+  .state-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom: 22px;
+  }
+  .state-label{
+    display:flex;
+    align-items:center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .state-pulse{
+    width: 7px; height:7px; border-radius:50%;
+    background: var(--text-faint);
+  }
+  .state-pulse.live{
+    background: var(--amber);
+    box-shadow: 0 0 0 4px var(--amber-dim);
+  }
+  .state-pulse.idle{
+    background: var(--sage);
+    box-shadow: 0 0 0 4px var(--sage-dim);
+  }
+  .session-tag{
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+
+  .timer{
+    font-size: 52px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    margin-bottom: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .timer-caption{
+    font-size: 12.5px;
+    color: var(--text-faint);
+    margin-bottom: 24px;
+  }
+
+  /* signal strip - represents camera monitoring activity */
+  .signal-block{
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 18px;
+  }
+  .signal-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom: 12px;
+  }
+  .signal-title{
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .signal-value{
+    font-size: 12.5px;
+    color: var(--text);
+  }
+  .bars{
+    display:flex;
+    align-items:flex-end;
+    gap: 3px;
+    height: 28px;
+  }
+  .bars span{
+    flex:1;
+    background: var(--sage);
+    opacity: 0.55;
+    border-radius: 1px;
+  }
+  .bars span:nth-child(4n){ background: var(--amber); opacity: 0.8; }
+
+  .field-row{
+    margin-bottom: 16px;
+  }
+  .field-label{
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    display:block;
+  }
+  select.app-select{
+    width: 100%;
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 11px 14px;
+    border-radius: 7px;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238d94a0' stroke-width='1.4' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    cursor: pointer;
+  }
+  select.app-select:focus-visible{ outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+  .app-list{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .app-check{
+    display:flex;
+    align-items:center;
+    gap: 9px;
+    background: var(--panel-raised);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 10px 12px;
+    font-size: 13.5px;
+    cursor: pointer;
+    transition: border-color .15s ease;
+  }
+  .app-check:hover{ border-color: var(--text-faint); }
+  .app-check input{
+    width: 15px; height: 15px;
+    accent-color: var(--amber);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .app-check:has(input:checked){
+    border-color: var(--amber);
+    background: var(--amber-dim);
+  }
+  @media (max-width: 480px){
+    .app-list{ grid-template-columns: 1fr; }
+  }
+
+  .hint{
+    font-size: 12px;
+    color: var(--text-faint);
+    line-height: 1.5;
+    margin-top: 4px;
+  }
+
+  /* transport controls */
+  .transport{
+    display:flex;
+    gap: 10px;
+    padding: 20px 28px 26px;
+    border-top: 1px solid var(--line);
+  }
+  .t-btn{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: 8px;
+    padding: 13px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    background: var(--panel-raised);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .t-btn svg{ width:14px; height:14px; flex-shrink:0; }
+  .t-btn:hover{ border-color: var(--text-faint); }
+  .t-btn:focus-visible{ outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .t-btn.primary{
+    background: var(--amber);
+    border-color: var(--amber);
+    color: #201203;
+  }
+  .t-btn.primary:hover{ filter: brightness(1.06); }
+  .t-btn:disabled{
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .footnote{
+    max-width: 640px;
+    width: 100%;
+    margin-top: 22px;
+    font-size: 12px;
+    color: var(--text-faint);
+    display:flex;
+    justify-content: space-between;
+  }
+
+  @media (max-width: 480px){
+    .timer{ font-size: 40px; }
+    .transport{ flex-wrap: wrap; }
+    .t-btn{ min-width: 30%; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <span class="brand-name">CaptureSuite</span>
+      <span class="brand-sub">Workspace Tracking</span>
+    </div>
+    <div class="conn"><span class="conn-dot"></span>Supabase verbunden</div>
+  </div>
+
+  <div class="console">
+    <div class="modes" role="tablist" aria-label="Modus wählen">
+      <button class="mode-btn" data-mode="standard">
+        Standard
+        <span class="mode-desc">Nur Sitzung</span>
+      </button>
+      <button class="mode-btn" data-mode="fokus">
+        Fokus
+        <span class="mode-desc">Kamera-Erkennung</span>
+      </button>
+      <button class="mode-btn active" data-mode="hyperfokus">
+        Hyperfokus
+        <span class="mode-desc">Eine App, keine Ablenkung</span>
+      </button>
+    </div>
+
+    <div class="readout">
+      <div class="state-row">
+        <div class="state-label"><span class="state-pulse idle" id="statePulse"></span><span id="stateText">Bereit</span></div>
+        <div class="session-tag" id="modeTag">Modus: Hyperfokus</div>
+      </div>
+
+      <div class="timer mono" id="timerDisplay">00:00:00</div>
+      <div class="timer-caption">Läuft ohne festes Zeitlimit — du bestimmst die Dauer</div>
+
+      <div class="signal-block" id="signalBlock">
+        <div class="signal-head">
+          <span class="signal-title">Kamera-Signal</span>
+          <span class="signal-value mono">bereit</span>
+        </div>
+        <div class="bars" id="bars"></div>
+      </div>
+
+      <div class="field-row" id="appPickerRow">
+        <label class="field-label">Erlaubte Apps im Hyperfokus</label>
+        <div class="app-list" id="appList">
+          <label class="app-check"><input type="checkbox" value="Notion"><span>Notion</span></label>
+          <label class="app-check"><input type="checkbox" value="VS Code"><span>VS Code</span></label>
+          <label class="app-check"><input type="checkbox" value="Word"><span>Word</span></label>
+          <label class="app-check"><input type="checkbox" value="PDF-Reader"><span>PDF-Reader</span></label>
+        </div>
+        <p class="hint" id="appHint">Während des Hyperfokus bleiben nur die ausgewählten Apps zugänglich. Alle anderen Benachrichtigungen werden stummgeschaltet.</p>
+      </div>
+    </div>
+
+    <div class="transport">
+      <button class="t-btn primary" id="startBtn">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>
+        Start
+      </button>
+      <button class="t-btn" id="pauseBtn" disabled>
+        <svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="3" width="3" height="10"/><rect x="9" y="3" width="3" height="10"/></svg>
+        Pause
+      </button>
+      <button class="t-btn" id="stopBtn" disabled>
+        <svg viewBox="0 0 16 16" fill="currentColor"><rect x="3.5" y="3.5" width="9" height="9"/></svg>
+        Stopp
+      </button>
+    </div>
+  </div>
+
+  <div class="footnote">
+    <span>Entwurf — Statusanzeigen sind zu Vorschauzwecken animiert</span>
+    <span class="mono">v0.2</span>
+  </div>
+
+<script>
+  // build signal bars
+  const bars = document.getElementById('bars');
+  for(let i=0;i<28;i++){
+    const b = document.createElement('span');
+    b.style.height = (18 + Math.random()*10) + 'px';
+    bars.appendChild(b);
+  }
+
+  const modeBtns = document.querySelectorAll('.mode-btn');
+  const modeTag = document.getElementById('modeTag');
+  const appPickerRow = document.getElementById('appPickerRow');
+  const signalBlock = document.getElementById('signalBlock');
+  const modeLabels = { standard: 'Standard', fokus: 'Fokus', hyperfokus: 'Hyperfokus' };
+
+  function setMode(mode){
+    modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    modeTag.textContent = 'Modus: ' + modeLabels[mode];
+    appPickerRow.style.display = mode === 'hyperfokus' ? 'block' : 'none';
+    signalBlock.style.display = mode === 'standard' ? 'none' : 'block';
+  }
+
+  modeBtns.forEach(btn => btn.addEventListener('click', () => setMode(btn.dataset.mode)));
+  setMode('hyperfokus');
+
+  // multi-app selection hint
+  const appHint = document.getElementById('appHint');
+  const appChecks = document.querySelectorAll('#appList input[type="checkbox"]');
+  function updateAppHint(){
+    const chosen = Array.from(appChecks).filter(c => c.checked).map(c => c.value);
+    if(chosen.length === 0){
+      appHint.textContent = 'Während des Hyperfokus bleiben nur die ausgewählten Apps zugänglich. Alle anderen Benachrichtigungen werden stummgeschaltet.';
+    } else {
+      appHint.textContent = 'Erlaubt: ' + chosen.join(', ') + '. Alle anderen Apps und Benachrichtigungen werden während der Sitzung blockiert.';
+    }
+  }
+  appChecks.forEach(c => c.addEventListener('change', updateAppHint));
+
+  // fake session control
+  let seconds = 0, interval = null;
+  const startBtn = document.getElementById('startBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const timerDisplay = document.getElementById('timerDisplay');
+  const statePulse = document.getElementById('statePulse');
+  const stateText = document.getElementById('stateText');
+
+  function format(s){
+    const h = String(Math.floor(s/3600)).padStart(2,'0');
+    const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+    const sec = String(s%60).padStart(2,'0');
+    return h+':'+m+':'+sec;
+  }
+
+  function tick(){ seconds++; timerDisplay.textContent = format(seconds); }
+
+  startBtn.addEventListener('click', () => {
+    if(interval) return;
+    interval = setInterval(tick, 1000);
+    statePulse.className = 'state-pulse live';
+    stateText.textContent = 'Sitzung läuft';
+    startBtn.disabled = true;
+    pauseBtn.disabled = false;
+    stopBtn.disabled = false;
+  });
+
+  pauseBtn.addEventListener('click', () => {
+    clearInterval(interval); interval = null;
+    statePulse.className = 'state-pulse idle';
+    stateText.textContent = 'Pausiert';
+    startBtn.disabled = false;
+    startBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg> Fortsetzen';
+  });
+
+  stopBtn.addEventListener('click', () => {
+    clearInterval(interval); interval = null;
+    seconds = 0; timerDisplay.textContent = format(seconds);
+    statePulse.className = 'state-pulse idle';
+    stateText.textContent = 'Bereit';
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    stopBtn.disabled = true;
+    startBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg> Start';
+  });
+</script>
+
+</body>
+</html>

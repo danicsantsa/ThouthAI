@@ -46,8 +46,15 @@ DB_CONFIG_FILE = os.path.join(OUTPUT_DIR, "db_config.json")
 PACKAGED_DB_CONFIG_FILE = os.path.join(RESOURCE_DIR, "db_config.json")
 
 # Global flag: ist die Datenbank verfügbar?
+# Standardmäßig direkt mit Supabase verbunden, damit Daten sofort in die Cloud geschrieben werden.
+# Nur ein explizites ATUM_USE_SUPABASE=0 oder false deaktiviert die Remote-DB.
 DB_AVAILABLE = False
 _CONNECTION_ERROR = None
+_ATUM_USE_SUPABASE = os.environ.get("ATUM_USE_SUPABASE")
+if _ATUM_USE_SUPABASE is None:
+    USE_SUPABASE = True
+else:
+    USE_SUPABASE = _ATUM_USE_SUPABASE.strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _load_or_ask_connection_string():
@@ -60,52 +67,91 @@ def _load_or_ask_connection_string():
     return None
 
 
+def _normalize_connection_string(conn_str):
+    """Supabase braucht explizit SSL; einige Netzwerke blockieren IPv6/5432 ohne TLS."""
+    if not conn_str:
+        return conn_str
+    if "sslmode=" in conn_str:
+        return conn_str
+    separator = "&" if "?" in conn_str else "?"
+    return f"{conn_str}{separator}sslmode=require"
+
+
+def _connect_with_retry(conn_str, retries=3, timeout=5):
+    """Versucht mehrere Verbindungen hintereinander, um kurzzeitige Supabase-Disconnects zu überwinden."""
+    normalized_conn_str = _normalize_connection_string(conn_str)
+    last_error = None
+    for attempt in range(1, retries + 1):
+        try:
+            conn = psycopg2.connect(
+                normalized_conn_str,
+                connect_timeout=timeout,
+                sslmode="require",
+                application_name="workspace_tracking",
+            )
+            return conn
+        except Exception as exc:
+            last_error = exc
+            if attempt < retries:
+                print(f"[DB] Verbindungsversuch {attempt}/{retries} fehlgeschlagen, retry...", file=sys.stderr)
+                continue
+    raise last_error
+
+
 def _test_connection():
-    """Testet die Datenbankverbindung. Setzt DB_AVAILABLE wenn erfolgreich."""
+    """Testet die Datenbankverbindung nur, wenn Supabase explizit aktiviert wurde."""
     global DB_AVAILABLE, _CONNECTION_ERROR
-    
+
+    if not USE_SUPABASE:
+        DB_AVAILABLE = False
+        _CONNECTION_ERROR = "Supabase deaktiviert (ATUM_USE_SUPABASE=0)"
+        print("[DB] Offline-Modus aktiv - Supabase nicht verbunden", file=sys.stderr)
+        return False
+
     conn_str = _load_or_ask_connection_string()
     if not conn_str:
         print("[DB] Warnung: Keine db_config.json - arbeite im Offline-Modus")
         DB_AVAILABLE = False
         return False
-    
+
     try:
         print("[DB] Versuche Verbindung zur Datenbank...", file=sys.stderr)
-        conn = psycopg2.connect(conn_str, connect_timeout=5)
+        conn = _connect_with_retry(conn_str, retries=3, timeout=5)
         conn.close()
         DB_AVAILABLE = True
+        _CONNECTION_ERROR = None
         print("[DB] ✓ Datenbank erreichbar", file=sys.stderr)
         return True
     except Exception as e:
         DB_AVAILABLE = False
         _CONNECTION_ERROR = str(e)
         print(f"[DB] ⚠ Datenbank NICHT erreichbar - arbeite OFFLINE", file=sys.stderr)
-        print(f"[DB]   Fehler: {str(e)[:100]}", file=sys.stderr)
+        print(f"[DB]   Fehler: {str(e)[:140]}", file=sys.stderr)
         print(f"[DB]   Daten werden lokal in CSV-Dateien gespeichert", file=sys.stderr)
         return False
 
 
 def get_connection():
-    """Öffnet eine neue Datenbankverbindung. 
-    Gibt None zurück wenn Datenbank nicht erreichbar (Offline-Modus).
+    """Öffnet eine neue Datenbankverbindung.
+    Bei kurzzeitigen Verbindungsabbrüchen versucht das Modul automatisch erneut zu verbinden.
     """
-    global DB_AVAILABLE
-    
-    if not DB_AVAILABLE:
-        return None
-    
+    global DB_AVAILABLE, _CONNECTION_ERROR
+
     conn_str = _load_or_ask_connection_string()
-    if not conn_str:
+    if not conn_str or not USE_SUPABASE:
+        DB_AVAILABLE = False
+        _CONNECTION_ERROR = "Supabase deaktiviert oder keine Verbindung konfiguriert"
         return None
-    
+
     try:
-        return psycopg2.connect(conn_str, connect_timeout=5)
+        conn = _connect_with_retry(conn_str, retries=3, timeout=5)
+        DB_AVAILABLE = True
+        _CONNECTION_ERROR = None
+        return conn
     except Exception as e:
-        global _CONNECTION_ERROR
         _CONNECTION_ERROR = str(e)
         DB_AVAILABLE = False
-        print(f"[DB] Verbindung verloren: {str(e)[:100]}", file=sys.stderr)
+        print(f"[DB] Verbindung verloren: {str(e)[:140]}", file=sys.stderr)
         return None
 
 
@@ -222,6 +268,63 @@ def start_recording_session(user_id, device_name=None, notes=None):
         import uuid
         session_id = str(uuid.uuid4())[:8]
         return session_id
+
+
+def ensure_table_exists(table_name, create_sql):
+    """Creates a missing table on the fly so newer app code can still run against older Supabase schemas."""
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT to_regclass(%s)", (table_name,))
+                exists = cur.fetchone()[0] is not None
+                if not exists:
+                    cur.execute(create_sql)
+                    conn.commit()
+                    print(f"[DB] Tabelle {table_name} wurde automatisch angelegt.", file=sys.stderr)
+        return True
+    except Exception as e:
+        print(f"[DB] Fehler beim Prüfen/Anlegen von {table_name}: {e}", file=sys.stderr)
+        return False
+
+
+def insert_session_mode(user_id, recording_session_id, mode, started_at=None, ended_at=None, notes=None):
+    """Speichert den gewählten Modus einer Sitzung in der Datenbank."""
+    mode = (mode or "standard").strip().lower()
+    if mode not in {"standard", "focus", "hyperfocus"}:
+        mode = "standard"
+    if not DB_AVAILABLE:
+        return None
+    ensure_table_exists(
+        "session_modes",
+        """
+        create table if not exists session_modes (
+            id bigserial primary key,
+            user_id uuid references users(id) on delete cascade,
+            recording_session_id uuid references recording_sessions(id) on delete cascade,
+            mode text not null check (mode in ('standard', 'focus', 'hyperfocus')),
+            started_at timestamptz not null default now(),
+            ended_at timestamptz,
+            notes text
+        )
+        """,
+    )
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    insert into session_modes (user_id, recording_session_id, mode, started_at, ended_at, notes)
+                    values (%s, %s, %s, %s, %s, %s)
+                """, (user_id, recording_session_id, mode, started_at or __import__("datetime").datetime.now(), ended_at, notes))
+                conn.commit()
+    except Exception as e:
+        print(f"[DB] Fehler beim Speichern des Session-Modus: {e}", file=sys.stderr)
+    return None
 
 
 def end_recording_session(recording_session_id):

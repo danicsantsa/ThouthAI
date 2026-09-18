@@ -55,8 +55,10 @@ DEFAULTS = {
     "camera": _DEFAULT_CAMERA,
     "rotate": 0,
     "device_name": "",
+    "session_mode": "standard",
     "work_apps": "code,pycharm,firefox,chrome,terminal,slack,word,excel,outlook",
     "non_work_apps": "spotify,steam,netflix,youtube,discord,instagram,tiktok,vlc",
+    "hyperfocus_app": "",
     "check_interval": 3.0,
     "db_flush_interval": 2.0,
 }

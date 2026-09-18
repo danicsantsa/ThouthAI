@@ -89,6 +89,88 @@ INACTIVITY_FILE = os.path.join(OUTPUT_DIR, "inactivity_periods.csv")
 CONFIG_FILE = os.path.join(OUTPUT_DIR, "activity_config.json")
 
 
+def normalize_app_filter(value):
+    """Normalize a comma-separated app filter into lowercase tokens."""
+    if value is None:
+        return ()
+    return tuple(
+        token.strip().lower()
+        for token in re.split(r"[,;|\s]+", str(value))
+        if token and token.strip()
+    )
+
+
+def app_matches_allowed(app_name, allowed_app):
+    """Return True when the active app name matches the allowed hyperfocus app."""
+    app_name_clean = (app_name or "").strip().lower()
+    if not app_name_clean or not allowed_app:
+        return False
+    for token in normalize_app_filter(allowed_app):
+        if not token:
+            continue
+        normalized_name = " ".join(app_name_clean.split())
+        if token in normalized_name or normalized_name in token:
+            return True
+        compact_name = normalized_name.replace(" ", "")
+        compact_token = token.replace(" ", "")
+        if compact_token in compact_name or compact_name in compact_token:
+            return True
+    return False
+
+
+def activate_allowed_hyperfocus_app(allowed_app):
+    """Focus the chosen allowed app in the current desktop session if possible."""
+    allowed_app = (allowed_app or "").strip()
+    if not allowed_app:
+        return False
+    if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+        return False
+    try:
+        window_ids = subprocess.check_output(
+            ["xdotool", "search", "--all", "--onlyvisible", "window"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).split()
+    except Exception:
+        return False
+
+    for window_id in window_ids:
+        try:
+            win_class = subprocess.check_output(
+                ["xdotool", "getwindowclassname", window_id],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+            win_name = subprocess.check_output(
+                ["xdotool", "getwindowname", window_id],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+        except Exception:
+            continue
+        if app_matches_allowed(f"{win_class} {win_name}", allowed_app):
+            try:
+                subprocess.run(
+                    ["xdotool", "windowactivate", str(window_id)],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return True
+            except Exception:
+                return False
+    return False
+
+
+def enforce_hyperfocus_app(current_app_name, allowed_app):
+    """Force focus back to the allowed app when the user leaves the hyperfocus app."""
+    current_app_name = current_app_name or ""
+    if not allowed_app or app_matches_allowed(current_app_name, allowed_app):
+        return False
+    print(f"[Hyperfocus] App blockiert: '{current_app_name}' ist nicht erlaubt. Fokus wird auf '{allowed_app}' gesetzt.")
+    return activate_allowed_hyperfocus_app(allowed_app)
+
+
 def activity_tracking_available():
     """True only on Linux systems with GNOME accessibility tools active."""
     if platform.system() != "Linux":

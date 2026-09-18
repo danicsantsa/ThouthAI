@@ -19,8 +19,8 @@ import cv2
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QFont, QImageReader, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QDialogButtonBox, QFormLayout, QGridLayout,
-    QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
+    QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
+    QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
     QPlainTextEdit, QPushButton, QStackedWidget, QTabBar, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget, QHeaderView, QFrame,
 )
@@ -37,11 +37,49 @@ VIDEO_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "recorded_videos")
 PREVIEW_IMAGE_PATH = os.path.join(OUTPUT_DIR, "camera_preview.png")
 SESSION_ID_PATTERN = re.compile(r"session_id=([a-f0-9\-]+)")
 COLORS = {
-    "bg": "#0b1110", "surface": "#121b18", "surface_alt": "#182520",
-    "text": "#e8f3ed", "muted": "#91aaa0", "border": "#294238",
-    "primary": "#39d98a", "primary_dark": "#1aa968",
-    "success": "#39d98a", "danger": "#ff6678", "warning": "#f2c14e",
+    "bg": "#14171c",
+    "panel": "#1b1f26",
+    "panel_raised": "#21262e",
+    "line": "#2b313b",
+    "text": "#eeece6",
+    "muted": "#8d94a0",
+    "text_faint": "#5c6470",
+    "amber": "#d98e3f",
+    "amber_dim": "rgba(217, 142, 63, 0.14)",
+    "sage": "#7ea08f",
+    "sage_dim": "rgba(126,160,143,0.14)",
+    "danger": "#c26a5c",
+    "warning": "#f2c14e",
+    "primary": "#39d98a",
+    "primary_dark": "#1aa968",
+    "success": "#39d98a",
 }
+VALID_SESSION_MODES = ("standard", "focus", "hyperfocus")
+SESSION_MODE_LABELS = {
+    "standard": "Standard",
+    "focus": "Fokus",
+    "hyperfocus": "Hyperfokus",
+}
+
+
+def normalize_session_mode(mode):
+    """Normalize and validate a session mode value for the app and worker."""
+    if mode is None:
+        return "standard"
+    normalized = str(mode).strip().lower().replace("-", "").replace(" ", "")
+    aliases = {
+        "standard": "standard",
+        "default": "standard",
+        "focus": "focus",
+        "fokus": "focus",
+        "fokusmodus": "focus",
+        "hyperfocus": "hyperfocus",
+        "hyperfokus": "hyperfocus",
+        "hyperfocusmodus": "hyperfocus",
+    }
+    if normalized in aliases:
+        return aliases[normalized]
+    return "standard" if normalized in ("", "standard") else normalized if normalized in VALID_SESSION_MODES else "standard"
 
 
 def apply_theme(app):
@@ -50,31 +88,53 @@ def apply_theme(app):
                    font-family: 'Noto Sans', 'DejaVu Sans', sans-serif;
                    font-size: 10pt; }}
         QMainWindow, QDialog {{ background: {COLORS['bg']}; }}
-        QPushButton {{ background: {COLORS['primary']}; color: #06100b; border: 0;
-                       border-radius: 5px; padding: 9px 16px; font-weight: 700; }}
-        QPushButton:hover {{ background: #63e6a5; }}
-        QPushButton:disabled {{ background: #35483f; color: #789187; }}
-        QLineEdit, QPlainTextEdit, QTableWidget {{ background: {COLORS['surface']};
-            border: 1px solid {COLORS['border']}; border-radius: 5px; padding: 6px; }}
-        QTableWidget {{ alternate-background-color: {COLORS['surface_alt']};
-                        gridline-color: {COLORS['border']}; }}
+        QPushButton {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 {COLORS['primary']}, stop:1 {COLORS['primary_dark']});
+                       color: #06100b; border: 0; border-radius: 8px;
+                       padding: 10px 18px; font-weight: 700; min-height: 42px;
+                       min-width: 170px; }}
+        QPushButton:hover {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                        stop:0 #63e6a5, stop:1 {COLORS['primary']}); }}
+        QPushButton:disabled {{ background: #2a3a35; color: #7d9188; }}
+        QLineEdit, QPlainTextEdit, QTableWidget {{ background: {COLORS['panel']};
+            border: 1px solid {COLORS['line']}; border-radius: 8px; padding: 6px; }}
+        QTableWidget {{ alternate-background-color: {COLORS['panel_raised']};
+                        gridline-color: {COLORS['line']}; }}
         QHeaderView::section {{ background: #1d3028; color: {COLORS['muted']};
                                 border: 0; padding: 8px; font-weight: 600; }}
-        QTabBar::tab {{ background: {COLORS['surface']}; padding: 10px 18px; border: 0;
+        QTabBar::tab {{ background: {COLORS['panel']}; padding: 10px 18px; border: 0;
                         color: {COLORS['muted']}; }}
         QTabBar::tab:selected {{ color: {COLORS['primary']};
                                  border-bottom: 2px solid {COLORS['primary']}; }}
-        #topBar, #sourcesSidebar {{ background: {COLORS['surface']};
-                        border-bottom: 1px solid {COLORS['border']}; }}
-        #sourcesSidebar {{ border-right: 1px solid {COLORS['border']};
-                   border-bottom: 0; }}
-        #metricCard {{ background: {COLORS['surface']};
-                   border: 1px solid {COLORS['border']}; border-radius: 4px; }}
-        QPushButton#secondaryButton {{ background: {COLORS['surface_alt']};
-                   color: {COLORS['text']};
-                           border: 1px solid {COLORS['border']}; }}
+        #topBar {{ background: {COLORS['panel']}; border: 1px solid {COLORS['line']};
+                   border-radius: 12px; margin: 12px 12px 0 12px; }}
+        #consolePanel {{ background: {COLORS['panel']}; border: 1px solid {COLORS['line']};
+                       border-radius: 10px; }}
+        #modeStrip {{ border-bottom: 1px solid {COLORS['line']}; }}
+        #modeButton {{ background: transparent; color: {COLORS['muted']}; border: 0; border-radius: 0;
+                      padding: 15px 12px 13px; min-height: 0; min-width: 0; font-weight: 500; }}
+        #modeButton:hover {{ background: rgba(255,255,255,0.02); color: {COLORS['text']}; }}
+        #modeButton:selected, #modeButton:checked {{ background: transparent; color: {COLORS['text']}; }}
+        #statusCard {{ background: {COLORS['panel']}; border: 1px solid {COLORS['line']};
+                      border-radius: 10px; min-height: 260px; }}
+        #readoutPanel {{ background: {COLORS['panel']}; border: 0; padding: 0; }}
+        #signalPanel {{ background: {COLORS['panel_raised']}; border: 1px solid {COLORS['line']};
+                       border-radius: 8px; padding: 16px 18px; }}
+        #modeButton.active {{ color: {COLORS['text']}; border-bottom: 2px solid {COLORS['amber']}; }}
+        #statusCard QPushButton {{ min-width: 120px; }}
+        QComboBox {{ background: {COLORS['panel_raised']}; color: {COLORS['text']};
+                    border: 1px solid {COLORS['line']}; border-radius: 7px;
+                    padding: 11px 14px; min-height: 42px; }}
+        QComboBox::drop-down {{ border: 0; background: transparent; }}
+        QComboBox QAbstractItemView {{ background: {COLORS['panel_raised']}; color: {COLORS['text']};
+                                     border: 1px solid {COLORS['line']}; selection-background-color: rgba(217,142,63,0.18); }}
+        #mainPanel {{ background: transparent; border: 0; }}
+        #metricCard {{ background: {COLORS['panel']}; border: 1px solid {COLORS['line']}; border-radius: 10px; }}
+        QPushButton#secondaryButton {{ background: {COLORS['panel_raised']};
+                   color: {COLORS['text']}; border: 1px solid {COLORS['line']}; }}
         QPushButton#secondaryButton:hover {{ border-color: {COLORS['primary']};
                              color: {COLORS['primary']}; }}
+        QLabel {{ color: {COLORS['text']}; }}
     """)
 
 
@@ -85,12 +145,26 @@ class TrackingProcess:
         self.proc = None
         self.output_queue = queue.Queue()
         self.session_id = None
+        self.state = "idle"
+        self.mode = "standard"
 
     def is_running(self):
-        return self.proc is not None and self.proc.poll() is None
+        return self.proc is not None and self.proc.poll() is None and self.state == "running"
 
-    def start(self, settings):
+    def is_paused(self):
+        return self.proc is not None and self.proc.poll() is None and self.state == "paused"
+
+    def start(self, settings, mode=None):
+        self.mode = normalize_session_mode(mode or settings.get("session_mode") or self.mode)
+        if self.mode == "standard":
+            self.state = "idle"
+            self.proc = None
+            self.session_id = None
+            return
         if self.is_running():
+            return
+        if self.proc is not None and self.proc.poll() is None:
+            self.resume()
             return
         if getattr(sys, "frozen", False):
             command = [sys.executable, "--worker"]
@@ -102,7 +176,10 @@ class TrackingProcess:
                    "--check-interval", str(settings["check_interval"]),
                    "--db-flush-interval", str(settings["db_flush_interval"]),
                    "--work-apps", settings["work_apps"],
-                   "--non-work-apps", settings["non_work_apps"]]
+                   "--non-work-apps", settings["non_work_apps"],
+                   "--session-mode", self.mode]
+        if self.mode == "hyperfocus" and settings.get("hyperfocus_app"):
+            command += ["--hyperfocus-app", settings["hyperfocus_app"]]
         if settings.get("device_name"):
             command += ["--device-name", settings["device_name"]]
         self.session_id = None
@@ -114,7 +191,34 @@ class TrackingProcess:
         else:
             options["preexec_fn"] = os.setsid
         self.proc = subprocess.Popen(command, **options)
+        self.state = "running"
         threading.Thread(target=self._read_output, daemon=True).start()
+
+    def pause(self):
+        if self.proc is None or self.proc.poll() is not None or self.state != "running":
+            return False
+        try:
+            if platform.system() in ("Linux", "Darwin"):
+                os.killpg(os.getpgid(self.proc.pid), signal.SIGSTOP)
+            else:
+                return False
+        except Exception:
+            return False
+        self.state = "paused"
+        return True
+
+    def resume(self):
+        if self.proc is None or self.proc.poll() is not None or self.state != "paused":
+            return False
+        try:
+            if platform.system() in ("Linux", "Darwin"):
+                os.killpg(os.getpgid(self.proc.pid), signal.SIGCONT)
+            else:
+                return False
+        except Exception:
+            return False
+        self.state = "running"
+        return True
 
     def _read_output(self):
         for line in self.proc.stdout:
@@ -126,7 +230,11 @@ class TrackingProcess:
         self.output_queue.put(None)
 
     def stop(self):
-        if not self.is_running():
+        if self.proc is None:
+            self.state = "idle"
+            return
+        if self.proc.poll() is not None:
+            self.state = "idle"
             return
         try:
             if platform.system() == "Windows":
@@ -135,13 +243,19 @@ class TrackingProcess:
                 os.killpg(os.getpgid(self.proc.pid), signal.SIGINT)
         except Exception:
             self.proc.terminate()
+        self.state = "stopped"
+        try:
+            self.proc.wait(timeout=8)
+        except Exception:
+            pass
+        self.state = "idle"
 
 
 class QuickSetupDialog(QDialog):
     def __init__(self, parent=None, on_saved=None):
         super().__init__(parent)
         self.on_saved = on_saved
-        self.setWindowTitle("Willkommen bei Workspace Tracking")
+        self.setWindowTitle("Willkommen bei Atum")
         self.setModal(True)
         self.setMinimumWidth(420)
         layout = QVBoxLayout(self)
@@ -181,10 +295,15 @@ class HomeTab(QWidget):
         self.on_state_changed = on_state_changed
         self.on_open_dashboard = on_open_dashboard
         self.tracker = TrackingProcess()
+        self.session_mode = normalize_session_mode(gui_settings.load_settings().get("session_mode"))
         self._start_time = None
+        self._elapsed_before_pause = 0
+        self._session_started_at = None
         self._video_duration_cache = {}
         self._invalid_videos = set()
         self._preview_mtime = None
+        self._focus_status_message = ""
+        self.hyperfocus_app_combo = None
         self._build_ui()
         self._load_settings_into_header()
         self._show_last_session_summary()
@@ -200,77 +319,129 @@ class HomeTab(QWidget):
         top_bar = QWidget()
         top_bar.setObjectName("topBar")
         top_layout = QHBoxLayout(top_bar)
-        top_layout.setContentsMargins(16, 10, 16, 10)
-        brand = QLabel("▣  CaptureSuite — Datenerfassung")
-        brand.setFont(QFont("Noto Sans", 11, QFont.Weight.DemiBold))
+        top_layout.setContentsMargins(18, 9, 18, 9)
+        brand = QLabel("Atum")
+        brand.setFont(QFont("Noto Sans", 10, QFont.Weight.DemiBold))
+        brand.setStyleSheet(f"color: {COLORS['text']}; letter-spacing: 0.4px;")
         top_layout.addWidget(brand)
         top_layout.addStretch()
-        self.connection_status = QLabel("●  TLS gesichert")
-        self.connection_status.setStyleSheet(f"color: {COLORS['success']};")
+        self.connection_status = QLabel("●  TLS")
+        self.connection_status.setStyleSheet(f"color: {COLORS['success']}; font-weight: 600; font-size: 9pt;")
         top_layout.addWidget(self.connection_status)
         layout.addWidget(top_bar)
 
-        content = QWidget()
-        content_layout = QHBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(0)
-        sidebar = self._build_sources_sidebar()
-        content_layout.addWidget(sidebar)
+        console = QWidget()
+        console.setObjectName("consolePanel")
+        console_layout = QVBoxLayout(console)
+        console_layout.setContentsMargins(0, 0, 0, 0)
+        console_layout.setSpacing(0)
 
-        main = QWidget()
-        main_layout = QVBoxLayout(main)
-        main_layout.setContentsMargins(16, 16, 16, 10)
-        main_layout.setSpacing(12)
-        main_layout.addWidget(self._section_label("Neue Erfassung"))
+        mode_row = QWidget()
+        mode_row.setObjectName("modeStrip")
+        mode_layout = QHBoxLayout(mode_row)
+        mode_layout.setContentsMargins(0, 0, 0, 0)
+        mode_layout.setSpacing(0)
+        self.mode_buttons = {}
+        for mode_name, label in (("standard", "Standard"), ("focus", "Fokus"), ("hyperfocus", "Hyperfokus")):
+            button = QPushButton(label)
+            button.setObjectName("modeButton")
+            button.setCheckable(True)
+            button.setProperty("mode", mode_name)
+            button.clicked.connect(lambda checked, value=mode_name: self._set_session_mode(value))
+            self.mode_buttons[mode_name] = button
+            mode_layout.addWidget(button)
 
-        capture = QHBoxLayout()
-        capture.setSpacing(16)
-        self.preview = QLabel("▣\n\nKamera 01")
-        preview = self.preview
-        preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        preview.setMinimumSize(190, 142)
-        preview.setStyleSheet("background: #050807; color: #6f8a7d; border: 1px solid #294238; border-radius: 5px;")
-        capture.addWidget(preview)
+        readout = QWidget()
+        readout.setObjectName("readoutPanel")
+        readout_layout = QVBoxLayout(readout)
+        readout_layout.setContentsMargins(28, 28, 28, 18)
+        readout_layout.setSpacing(12)
 
-        control = QWidget()
-        control_layout = QVBoxLayout(control)
-        control_layout.setContentsMargins(0, 0, 0, 0)
-        self.status_indicator = QLabel("● Bereit")
-        self.status_indicator.setStyleSheet(f"color: {COLORS['success']}; font-weight: 600")
+        state_row = QHBoxLayout()
+        self.status_indicator = QLabel("Bereit")
+        self.status_indicator.setStyleSheet(f"color: {COLORS['success']}; font-weight: 700; font-size: 13px;")
+        state_row.addWidget(self.status_indicator)
+        state_row.addStretch()
+        self.mode_label = QLabel(f"Modus: {SESSION_MODE_LABELS[self.session_mode]}")
+        self.mode_label.setStyleSheet(f"color: {COLORS['muted']}; font-size: 12px;")
+        state_row.addWidget(self.mode_label)
+        readout_layout.addLayout(state_row)
+
         self.elapsed_time = QLabel("00:00:00")
-        self.elapsed_time.setFont(QFont("Noto Sans Mono", 20, QFont.Weight.Bold))
+        self.elapsed_time.setFont(QFont("Noto Sans Mono", 30, QFont.Weight.Bold))
+        self.elapsed_time.setStyleSheet("color: #eeece6; letter-spacing: 0.01em;")
+        readout_layout.addWidget(self.elapsed_time)
+
+        timer_caption = QLabel("Läuft ohne festes Zeitlimit — du bestimmst die Dauer")
+        timer_caption.setStyleSheet(f"color: {COLORS['text_faint']}; font-size: 12px;")
+        readout_layout.addWidget(timer_caption)
+
+        self.signal_panel = QWidget()
+        self.signal_panel.setObjectName("signalPanel")
+        signal_layout = QVBoxLayout(self.signal_panel)
+        signal_layout.setContentsMargins(0, 0, 0, 0)
+        signal_head = QHBoxLayout()
+        signal_title = QLabel("Kamera-Signal")
+        signal_title.setStyleSheet(f"color: {COLORS['muted']}; font-size: 12px;")
+        self.signal_value = QLabel("bereit")
+        self.signal_value.setStyleSheet(f"color: {COLORS['text']}; font-size: 12px;")
+        signal_head.addWidget(signal_title)
+        signal_head.addStretch()
+        signal_head.addWidget(self.signal_value)
+        signal_layout.addLayout(signal_head)
+
+        bars = QWidget()
+        bars_layout = QHBoxLayout(bars)
+        bars_layout.setContentsMargins(0, 0, 0, 0)
+        bars_layout.setSpacing(3)
+        for idx in range(28):
+            bar = QWidget()
+            bar.setFixedHeight(26)
+            bar.setStyleSheet(f"background: {COLORS['sage']}; border-radius: 1px; opacity: {0.5 if idx % 4 else 0.9};")
+            bars_layout.addWidget(bar)
+        signal_layout.addWidget(bars)
+        readout_layout.addWidget(self.signal_panel)
+
+        self.focus_status = QLabel("Fokusstatus: normal")
+        self.focus_status.setStyleSheet(f"color: {COLORS['muted']}; font-size: 12px;")
+        readout_layout.addWidget(self.focus_status)
+
+        self.hyperfocus_label = QLabel("Erlaubte App im Hyperfokus")
+        self.hyperfocus_label.setVisible(False)
+        self.hyperfocus_label.setStyleSheet(f"color: {COLORS['muted']}; font-size: 12px;")
+        readout_layout.addWidget(self.hyperfocus_label)
+
+        self.hyperfocus_app_combo = QComboBox()
+        self.hyperfocus_app_combo.setVisible(False)
+        self.hyperfocus_app_combo.currentTextChanged.connect(self._on_hyperfocus_app_changed)
+        readout_layout.addWidget(self.hyperfocus_app_combo)
+
         buttons = QHBoxLayout()
-        self.start_btn = QPushButton("●  Start")
-        self.stop_btn = QPushButton("■  Stop")
+        buttons.setSpacing(10)
+        self.start_btn = QPushButton("Start")
+        self.pause_btn = QPushButton("Pause")
+        self.stop_btn = QPushButton("Stop")
+        self.pause_btn.setEnabled(False)
         self.stop_btn.setEnabled(False)
+        self.start_btn.setMinimumWidth(120)
+        self.pause_btn.setMinimumWidth(120)
+        self.stop_btn.setMinimumWidth(120)
         self.start_btn.clicked.connect(self._on_start)
+        self.pause_btn.clicked.connect(self._on_pause)
         self.stop_btn.clicked.connect(self._on_stop)
         buttons.addWidget(self.start_btn)
+        buttons.addWidget(self.pause_btn)
         buttons.addWidget(self.stop_btn)
-        control_layout.addWidget(QLabel("Aufnahmedauer"))
-        control_layout.addWidget(self.elapsed_time)
-        control_layout.addWidget(self.status_indicator)
-        control_layout.addLayout(buttons)
-        control_layout.addStretch()
-        capture.addWidget(control, 1)
-        main_layout.addLayout(capture)
-        main_layout.addWidget(self._build_metric_cards())
-        records_header = QHBoxLayout()
-        records_header.addWidget(self._section_label("Erfasste Datensätze"))
-        records_header.addStretch()
-        export_btn = QPushButton("↓  Als CSV exportieren")
-        export_btn.setObjectName("secondaryButton")
-        export_btn.clicked.connect(self._export_records)
-        records_header.addWidget(export_btn)
-        main_layout.addLayout(records_header)
-        self.records = QTableWidget(0, 5)
-        self.records.setHorizontalHeaderLabels(("Video", "Aufgenommen", "Größe", "Dauer", "Sync"))
-        self.records.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.records.verticalHeader().setVisible(False)
-        self.records.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        main_layout.addWidget(self.records, 1)
-        content_layout.addWidget(main, 1)
-        layout.addWidget(content, 1)
+        readout_layout.addLayout(buttons)
+
+        self._populate_hyperfocus_apps()
+        self._update_focus_status_display()
+        self._refresh_session_mode_buttons()
+        self._sync_session_controls()
+
+        console_layout.addWidget(mode_row)
+        console_layout.addWidget(readout)
+        layout.addWidget(console, 1)
 
         self.last_session = QLabel()
         self.last_session.setVisible(False)
@@ -282,9 +453,8 @@ class HomeTab(QWidget):
         status_layout = QHBoxLayout(status_bar)
         status_layout.setContentsMargins(16, 8, 16, 8)
         self.local_count = QLabel("▣  0 Datensätze lokal")
+        self.local_count.setVisible(False)
         status_layout.addWidget(self.local_count)
-        self.supabase_status = QLabel()
-        status_layout.addWidget(self.supabase_status)
         status_layout.addStretch()
         status_layout.addWidget(QLabel("Angemeldet als lokaler Benutzer"))
         layout.addWidget(status_bar)
@@ -295,81 +465,9 @@ class HomeTab(QWidget):
         label.setFont(QFont("Noto Sans", 11, QFont.Weight.DemiBold))
         return label
 
-    def _build_sources_sidebar(self):
-        sidebar = QWidget()
-        sidebar.setObjectName("sourcesSidebar")
-        sidebar.setFixedWidth(190)
-        layout = QVBoxLayout(sidebar)
-        layout.setContentsMargins(10, 14, 10, 14)
-        layout.addWidget(QLabel("Hardware-Quellen"))
-        for name, active in (("▣  Kamera 01", True), ("♨  Temperatur", False),
-                     ("⌖  GPS", False), ("⚖  Waage", False)):
-            source = QLabel(f"{name}     {'●' if active else '○'}")
-            source.setStyleSheet(f"padding: 7px; color: {COLORS['text'] if active else COLORS['muted']};")
-            layout.addWidget(source)
-        add_source = QPushButton("＋  Quelle hinzufügen")
-        add_source.setObjectName("secondaryButton")
-        add_source.clicked.connect(lambda: self.output_text.appendPlainText("Quelle hinzufügen: noch nicht konfiguriert"))
-        layout.addWidget(add_source)
-        layout.addStretch()
-        return sidebar
-
-    def _build_metric_cards(self):
-        cards = QWidget()
-        grid = QGridLayout(cards)
-        grid.setContentsMargins(0, 0, 0, 0)
-        for column, (name, value) in enumerate((("Temperatur", "Nicht angeschlossen"),
-                              ("GPS", "Nicht angeschlossen"),
-                                                  ("Waage", "—"))):
-            card = QFrame()
-            card.setObjectName("metricCard")
-            card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(10, 8, 10, 8)
-            card_layout.addWidget(QLabel(name))
-            value_label = QLabel(value)
-            value_label.setFont(QFont("Noto Sans Mono", 11, QFont.Weight.DemiBold))
-            card_layout.addWidget(value_label)
-            grid.addWidget(card, 0, column)
-        return cards
-
-    def _export_records(self):
-        self.output_text.appendPlainText("CSV-Export ist für die lokalen Datensätze vorbereitet.")
-
     def _refresh_video_list(self):
-        video_dir = Path(VIDEO_OUTPUT_DIR)
-        videos = sorted(
-            (path for path in video_dir.glob("*.mp4")
-             if not path.name.endswith(".part.mp4")),
-            key=lambda path: path.stat().st_mtime,
-            reverse=True,
-        ) if video_dir.exists() else []
-        self.records.setRowCount(len(videos))
-        for row, video in enumerate(videos):
-            info = video.stat()
-            metadata = self._load_video_metadata(video)
-            duration_seconds = metadata.get("duration_seconds")
-            if duration_seconds is None:
-                duration_seconds = self._read_video_duration(video)
-            values = (
-                video.name,
-                datetime.datetime.fromtimestamp(info.st_mtime).strftime("%d.%m %H:%M"),
-                f"{info.st_size / 1024 / 1024:.1f} MB",
-                self._format_duration(duration_seconds),
-                "●" if db_client.DB_AVAILABLE else "○",
-            )
-            for column, value in enumerate(values):
-                self.records.setItem(row, column, QTableWidgetItem(value))
-        self.local_count.setText(f"▣  {len(videos)} Videos lokal")
-        if db_client.DB_AVAILABLE:
-            self.supabase_status.setText("☁  Supabase verbunden")
-            self.supabase_status.setStyleSheet(f"color: {COLORS['success']};")
-            self.connection_status.setText("●  Supabase verbunden")
-            self.connection_status.setStyleSheet(f"color: {COLORS['success']};")
-        else:
-            self.supabase_status.setText("☁  Supabase nicht verbunden")
-            self.supabase_status.setStyleSheet(f"color: {COLORS['danger']};")
-            self.connection_status.setText("●  Supabase nicht verbunden")
-            self.connection_status.setStyleSheet(f"color: {COLORS['danger']};")
+        # Database status is intentionally hidden from the UI.
+        return
 
     def _load_video_metadata(self, video):
         metadata_path = video.with_suffix(".json")
@@ -408,25 +506,7 @@ class HomeTab(QWidget):
         return None
 
     def _refresh_preview(self):
-        try:
-            preview_mtime = os.path.getmtime(PREVIEW_IMAGE_PATH)
-        except OSError:
-            preview_mtime = None
-
-        if preview_mtime is not None and preview_mtime != self._preview_mtime:
-            reader = QImageReader(PREVIEW_IMAGE_PATH)
-            reader.setAutoTransform(True)
-            image = reader.read()
-            if not image.isNull():
-                pixmap = QPixmap.fromImage(image)
-                self.preview.setPixmap(pixmap.scaled(
-                    self.preview.size(), Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation))
-                self.preview.setText("")
-                self._preview_mtime = preview_mtime
-        elif not self.is_tracking():
-            self.preview.setPixmap(QPixmap())
-            self.preview.setText("▣\n\nKamera 01")
+        return
 
     def _load_settings_into_header(self):
         pass
@@ -444,33 +524,173 @@ class HomeTab(QWidget):
                 pass
         self.last_session.setText(summary)
 
+    def _elapsed_seconds(self):
+        if self._session_started_at is not None:
+            return self._elapsed_before_pause + int((datetime.datetime.now() - self._session_started_at).total_seconds())
+        return self._elapsed_before_pause
+
+    def _update_focus_status_display(self, override_message=None):
+        if override_message:
+            text = f"Fokusstatus: {override_message}"
+            self.focus_status.setText(text)
+            self.focus_status.setStyleSheet(f"color: {COLORS['warning']}; font-size: 9pt;")
+            return
+
+        if self.session_mode == "standard":
+            text = "Fokusstatus: normal"
+            color = COLORS["muted"]
+        elif self.session_mode == "focus":
+            text = "Fokusstatus: aktiv"
+            color = COLORS["primary"]
+        else:
+            text = "Fokusstatus: Hyperfocus aktiv"
+            color = COLORS["warning"]
+        self.focus_status.setText(text)
+        self.focus_status.setStyleSheet(f"color: {color}; font-size: 9pt;")
+
+    def _populate_hyperfocus_apps(self):
+        if self.hyperfocus_app_combo is None:
+            return
+        settings = gui_settings.load_settings()
+        apps = [item.strip() for item in str(settings.get("work_apps", "")).split(",") if item.strip()]
+        if not apps:
+            apps = ["code", "firefox", "chrome", "terminal", "slack"]
+        self.hyperfocus_app_combo.blockSignals(True)
+        self.hyperfocus_app_combo.clear()
+        self.hyperfocus_app_combo.addItem("Bitte App wählen", "")
+        for app in apps:
+            self.hyperfocus_app_combo.addItem(app, app)
+        current = settings.get("hyperfocus_app", "")
+        if current:
+            index = self.hyperfocus_app_combo.findData(current)
+            if index >= 0:
+                self.hyperfocus_app_combo.setCurrentIndex(index)
+        self.hyperfocus_app_combo.blockSignals(False)
+        self._sync_hyperfocus_controls()
+
+    def _sync_hyperfocus_controls(self):
+        if self.hyperfocus_app_combo is None:
+            return
+        is_hyperfocus = self.session_mode == "hyperfocus"
+        self.hyperfocus_label.setVisible(is_hyperfocus)
+        self.hyperfocus_app_combo.setVisible(is_hyperfocus)
+
+    def _on_hyperfocus_app_changed(self, value):
+        if not value:
+            return
+        settings = gui_settings.load_settings()
+        settings["hyperfocus_app"] = value
+        gui_settings.save_settings(settings)
+
+    def _refresh_session_mode_buttons(self):
+        for mode_name, button in self.mode_buttons.items():
+            is_selected = mode_name == self.session_mode
+            button.setChecked(is_selected)
+            if is_selected:
+                button.setStyleSheet(
+                    "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #63e6a5, stop:1 #39d98a); "
+                    "color: #06100b; border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 700;"
+                )
+            else:
+                button.setStyleSheet(
+                    "background: #182520; color: #e8f3ed; border: 1px solid #294238; border-radius: 8px; "
+                    "padding: 8px 12px; font-weight: 600;"
+                )
+        self.mode_label.setText(f"Modus: {SESSION_MODE_LABELS[self.session_mode]}")
+        self._sync_hyperfocus_controls()
+        self._update_focus_status_display()
+        if hasattr(self, "signal_panel"):
+            self.signal_panel.setVisible(self.session_mode == "standard")
+
+    def _set_session_mode(self, mode):
+        self.session_mode = normalize_session_mode(mode)
+        settings = gui_settings.load_settings()
+        settings["session_mode"] = self.session_mode
+        gui_settings.save_settings(settings)
+        self._refresh_session_mode_buttons()
+        if hasattr(self, "signal_panel"):
+            self.signal_panel.setVisible(self.session_mode == "standard")
+        if self.tracker is not None:
+            self.tracker.mode = self.session_mode
+
+    def _sync_session_controls(self):
+        self.mode_label.setText(f"Modus: {SESSION_MODE_LABELS[self.session_mode]}")
+        if hasattr(self, "signal_panel"):
+            self.signal_panel.setVisible(self.session_mode == "standard")
+        if self.tracker.is_running():
+            self.start_btn.setEnabled(False)
+            self.pause_btn.setEnabled(True)
+            self.pause_btn.setText("Pause")
+            self.stop_btn.setEnabled(True)
+            self.status_indicator.setText("● Aufnahme läuft")
+            self.status_indicator.setStyleSheet(f"color: {COLORS['success']}; font-weight: 600")
+            self._update_focus_status_display(self._focus_status_message or None)
+            return
+        if self.tracker.is_paused():
+            self.start_btn.setEnabled(False)
+            self.pause_btn.setEnabled(True)
+            self.pause_btn.setText("Resume")
+            self.stop_btn.setEnabled(True)
+            self.status_indicator.setText("● Pausiert")
+            self.status_indicator.setStyleSheet(f"color: {COLORS['warning']}; font-weight: 600")
+            self._update_focus_status_display(self._focus_status_message or None)
+            return
+        self.start_btn.setEnabled(True)
+        self.pause_btn.setEnabled(False)
+        self.pause_btn.setText("Pause")
+        self.stop_btn.setEnabled(False)
+        self.status_indicator.setText("● Bereit")
+        self.status_indicator.setStyleSheet(f"color: {COLORS['success']}; font-weight: 600")
+        self._update_focus_status_display()
+
     def is_tracking(self):
-        return self.tracker.is_running()
+        return self.tracker.is_running() or self.tracker.is_paused()
 
     def _on_start(self):
         settings = gui_settings.load_settings()
         if not settings.get("user"):
             QMessageBox.warning(self, "Setup erforderlich", "Bitte geben Sie zuerst Ihren Namen ein.")
             return
+        settings["session_mode"] = self.session_mode
+        gui_settings.save_settings(settings)
         try:
-            self.tracker.start(settings)
-            self.start_btn.setEnabled(False)
-            self.stop_btn.setEnabled(True)
-            self.status_indicator.setText("● Kamera und MediaPipe werden gestartet ...")
-            self.status_indicator.setStyleSheet(f"color: {COLORS['success']}; font-weight: 600")
-            self._start_time = datetime.datetime.now()
+            if self.session_mode == "hyperfocus":
+                selected_app = self.hyperfocus_app_combo.currentData() if self.hyperfocus_app_combo is not None else ""
+                settings["hyperfocus_app"] = selected_app or settings.get("hyperfocus_app", "")
+                gui_settings.save_settings(settings)
+            if self.tracker.is_paused():
+                self.tracker.resume()
+                self._session_started_at = datetime.datetime.now()
+            else:
+                self.tracker.start(settings, mode=self.session_mode)
+                self._session_started_at = datetime.datetime.now()
+                self._elapsed_before_pause = 0
+            self._sync_session_controls()
             if self.on_state_changed:
                 self.on_state_changed(settings["user"], None, True)
         except Exception as exc:
             QMessageBox.critical(self, "Fehler", f"Konnte Aufnahme nicht starten: {exc}")
 
+    def _on_pause(self):
+        if self.tracker.is_paused():
+            if self.tracker.resume():
+                self._session_started_at = datetime.datetime.now()
+                self._sync_session_controls()
+                if self.on_state_changed:
+                    self.on_state_changed("", self.tracker.session_id, True)
+            return
+        if self.tracker.pause():
+            self._elapsed_before_pause = self._elapsed_seconds()
+            self._session_started_at = None
+            self._sync_session_controls()
+            if self.on_state_changed:
+                self.on_state_changed("", self.tracker.session_id, False)
+
     def _on_stop(self):
         self.tracker.stop()
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.status_indicator.setText("● Bereit")
-        self.status_indicator.setStyleSheet(f"color: {COLORS['success']}; font-weight: 600")
-        self._start_time = None
+        self._elapsed_before_pause = 0
+        self._session_started_at = None
+        self._sync_session_controls()
         if self.on_state_changed:
             self.on_state_changed("", self.tracker.session_id, False)
 
@@ -481,19 +701,27 @@ class HomeTab(QWidget):
                 if line is None:
                     break
                 self.output_text.appendPlainText(line)
+                if "[Fokus]" in line:
+                    self._focus_status_message = line.split("[Fokus]", 1)[1].strip()
+                    self._update_focus_status_display("Ablenkung erkannt")
+                elif self._focus_status_message:
+                    self._focus_status_message = ""
+                    self._update_focus_status_display()
         except queue.Empty:
             pass
-        if self._start_time and self.tracker.proc is not None and not self.is_tracking():
-            self.start_btn.setEnabled(True)
-            self.stop_btn.setEnabled(False)
-            self.status_indicator.setText("● Kamera/MediaPipe wurde beendet - keine Preview")
-            self.status_indicator.setStyleSheet(f"color: {COLORS['danger']}; font-weight: 600")
-            self._start_time = None
-        if self._start_time:
-            seconds = int((datetime.datetime.now() - self._start_time).total_seconds())
+        if self.tracker.proc is not None and self.tracker.proc.poll() is not None and self.tracker.state != "idle":
+            self.tracker.state = "idle"
+            self._elapsed_before_pause = 0
+            self._session_started_at = None
+            self._focus_status_message = ""
+            self._sync_session_controls()
+        if self.tracker.is_running() and self._session_started_at is not None:
+            seconds = self._elapsed_seconds()
             hours, remainder = divmod(seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
             self.elapsed_time.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+        elif not self.tracker.is_running() and not self.tracker.is_paused():
+            self.elapsed_time.setText("00:00:00")
         self._refresh_preview()
         self._refresh_video_list()
 
@@ -595,7 +823,7 @@ class App(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Workspace Tracking")
+        self.setWindowTitle("Atum")
         self.resize(900, 700)
         self.setMinimumSize(800, 600)
         central = QWidget()
@@ -645,10 +873,11 @@ class App(QMainWindow):
 
 
 def main():
-    print("[App] Starte Workspace Tracking GUI...", file=sys.stderr)
+    from capturesuite_qt_new import QApplication, QFont, MainWindow
+
     app = QApplication.instance() or QApplication(sys.argv)
-    apply_theme(app)
-    window = App()
+    app.setFont(QFont("IBM Plex Sans", 10))
+    window = MainWindow()
     window.show()
     return app.exec()
 
