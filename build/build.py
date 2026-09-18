@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
 Cross-platform build script for Atum
-Builds installers for Windows, macOS, and Linux
+Builds installers for Windows (NSIS), macOS (DMG) and Linux (AppImage + .deb).
+
+Usage (from anywhere):  python build/build.py
+
+In CI (env var CI=true, set automatically by GitHub Actions) the script is
+strict: a missing installer makes the build fail instead of being ignored.
 """
 
 import os
@@ -9,7 +14,7 @@ import sys
 import platform
 import subprocess
 import shutil
-import json
+import time
 from pathlib import Path
 
 # Windows consoles default to cp1252, which can't encode the emoji used in
@@ -19,58 +24,97 @@ if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     except AttributeError:
-        pass  # Python < 3.7 fallback, not expected here
+        pass
 
+# ---------------------------------------------------------------------------
 # Configuration
+# ---------------------------------------------------------------------------
+ROOT = Path(__file__).resolve().parent.parent  # repo root (parent of build/)
+
 PROJECT_NAME = "Atum"
-VERSION = "1.0.0"
 ICON_SOURCE = "workspace-tracking-icon.png"  # Source icon for all platforms
 BUILD_DIR = Path("build")
 DIST_DIR = Path("dist")
 SPEC_FILE = "build/atum.spec"
 
-def run_command(cmd, description, allow_fail=False):
-    """Run a shell command and report progress"""
-    print(f"\n{'='*60}")
+# TODO: enter your real maintainer data (used in the .deb control file)
+MAINTAINER = "Dein Name <deine@mail.de>"
+
+# System libraries Qt needs at runtime on Debian/Ubuntu
+DEB_DEPENDS = [
+    "libegl1", "libgl1", "libglib2.0-0", "libdbus-1-3", "libfontconfig1",
+    "libxkbcommon0", "libxkbcommon-x11-0", "libxcb-cursor0",
+    "libxcb-icccm4", "libxcb-image0", "libxcb-keysyms1", "libxcb-randr0",
+    "libxcb-render-util0", "libxcb-shape0", "libxcb-xinerama0",
+]
+
+# In CI, errors in installer steps must not be swallowed
+STRICT = bool(os.environ.get("CI"))
+
+# CPU architecture handling (Linux packaging)
+MACHINE = platform.machine().lower()
+DEB_ARCH = {"x86_64": "amd64", "amd64": "amd64",
+            "aarch64": "arm64", "arm64": "arm64"}.get(MACHINE, "amd64")
+APPIMAGE_ARCH = "aarch64" if MACHINE in ("aarch64", "arm64") else "x86_64"
+
+
+def _detect_version():
+    """Use the git tag (v1.2.3 -> 1.2.3) when built from a tag in CI."""
+    if os.environ.get("GITHUB_REF_TYPE") == "tag":
+        ref_name = os.environ.get("GITHUB_REF_NAME", "")
+        if ref_name:
+            return ref_name.lstrip("v")
+    return "1.0.0"
+
+
+VERSION = _detect_version()
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def run_command(cmd, description, allow_fail=False, env=None, retries=1):
+    """Run a command and report progress. Prefer list commands (no shell)."""
+    print(f"\n{'=' * 60}")
     print(f"📦 {description}")
-    print(f"{'='*60}")
-    print(f"$ {' '.join(cmd) if isinstance(cmd, list) else cmd}")
+    print(f"{'=' * 60}")
+    shown = " ".join(str(c) for c in cmd) if isinstance(cmd, list) else cmd
+    print(f"$ {shown}")
     print()
 
-    result = subprocess.run(cmd, shell=isinstance(cmd, str))
-    if result.returncode != 0:
-        if allow_fail:
-            print(f"⚠️  Non-fatal failure: {description}")
-            return False
-        print(f"❌ Failed: {description}")
-        sys.exit(1)
-    print(f"✅ Completed: {description}")
-    return True
+    for attempt in range(1, retries + 1):
+        result = subprocess.run(cmd, shell=isinstance(cmd, str), env=env)
+        if result.returncode == 0:
+            print(f"✅ Completed: {description}")
+            return True
+        if attempt < retries:
+            print(f"⚠️  Attempt {attempt}/{retries} failed, retrying in 5s...")
+            time.sleep(5)
+
+    if allow_fail:
+        print(f"⚠️  Non-fatal failure: {description}")
+        return False
+    print(f"❌ Failed: {description}")
+    sys.exit(1)
+
 
 def ensure_directories():
     """Create necessary directories"""
     BUILD_DIR.mkdir(exist_ok=True)
     DIST_DIR.mkdir(exist_ok=True)
 
-def install_build_dependencies():
-    """Install PyInstaller and platform-specific tools"""
-    print("\n📥 Installing build dependencies...")
 
-    deps = ["pyinstaller", "pillow"]  # Pillow for icon conversion
+def ensure_pyinstaller():
+    """Install PyInstaller if it is missing"""
+    try:
+        import PyInstaller  # noqa: F401
+    except ImportError:
+        print("\n⚠️  PyInstaller not found. Installing...")
+        run_command(
+            [sys.executable, "-m", "pip", "install", "pyinstaller"],
+            "Installing PyInstaller",
+        )
 
-    # Platform-specific dependencies
-    system = platform.system()
-    if system == "Windows":
-        pass  # PyInstaller itself handles windowed builds via --windowed flag / spec
-    elif system == "Darwin":  # macOS
-        pass  # DMG creation uses the built-in hdiutil, no pip package needed
-    elif system == "Linux":
-        deps.extend(["fpm"])  # optional alt-path; dpkg-deb comes from dpkg-dev (apt, not pip)
-
-    run_command(
-        f"pip install {' '.join(deps)}",
-        "Installing build dependencies"
-    )
 
 def convert_icon(source_path):
     """Convert PNG icon to platform-specific formats"""
@@ -88,21 +132,20 @@ def convert_icon(source_path):
 
         # Windows icon (.ico)
         icon_sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
-        img_copy = img.convert('RGBA')
         ico_path = BUILD_DIR / "icon.ico"
-        img_copy.save(str(ico_path), 'ico', sizes=icon_sizes)
+        img.convert("RGBA").save(str(ico_path), "ICO", sizes=icon_sizes)
         print(f"  ✅ Created Windows icon: {ico_path}")
 
-        # macOS icon (.icns) - requires sips/iconutil, macOS only
+        # macOS icon (.icns) - sips is macOS only
         if platform.system() == "Darwin":
             icns_path = BUILD_DIR / "icon.icns"
             run_command(
-                f"sips -s format icns {source_path} --out {icns_path}",
+                ["sips", "-s", "format", "icns", str(source_path), "--out", str(icns_path)],
                 "Creating macOS icon",
                 allow_fail=True,
             )
 
-        # Linux icon (PNG 512x512)
+        # Linux icon (PNG)
         linux_icon = BUILD_DIR / "icon_512.png"
         img.save(str(linux_icon))
         print(f"  ✅ Created Linux icon: {linux_icon}")
@@ -110,104 +153,158 @@ def convert_icon(source_path):
     except ImportError:
         print("  ⚠️  Pillow not installed - skipping icon conversion")
 
-def build_windows_exe():
-    """Build Windows executable using PyInstaller"""
+
+def run_pyinstaller():
+    """Build the onedir application with PyInstaller (once for all platforms)"""
+    if not Path(SPEC_FILE).exists():
+        print(f"❌ Spec file not found: {SPEC_FILE}")
+        sys.exit(1)
+
+    run_command(
+        [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", SPEC_FILE],
+        f"Building {PROJECT_NAME} with PyInstaller",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Windows
+# ---------------------------------------------------------------------------
+def build_windows_installer():
+    """Create the Windows installer with NSIS"""
     if platform.system() != "Windows":
-        print("⏭️  Skipping Windows build (not on Windows)")
+        print("⏭️  Skipping Windows installer (not on Windows)")
         return
 
-    run_command(
-        f"pyinstaller --noconfirm --clean {SPEC_FILE}",
-        "Building Windows executable"
-    )
-
-    # Create Windows installer using NSIS (if available)
     installer_script = BUILD_DIR / "atum_installer.nsi"
-    if shutil.which("makensis") and installer_script.exists():
-        run_command(
-            f"makensis {installer_script}",
-            "Creating Windows installer (.exe)",
-            allow_fail=True,
-        )
-    else:
-        print("⚠️  NSIS not found or no .nsi script - shipping raw folder as .zip instead")
+    makensis = shutil.which("makensis")
 
-def build_mac_app():
-    """Build macOS .app bundle and DMG"""
-    if platform.system() != "Darwin":
-        print("⏭️  Skipping macOS build (not on macOS)")
+    if not makensis or not installer_script.exists():
+        print("⚠️  NSIS (makensis) or build/atum_installer.nsi not found - no installer created")
         return
 
+    # makensis resolves relative paths against the folder of the .nsi file
+    # (build/), so OutFile / File lines should use ..\dist\...
     run_command(
-        f"pyinstaller --noconfirm --clean {SPEC_FILE}",
-        "Building macOS app bundle"
+        [makensis, str(installer_script)],
+        "Creating Windows installer (.exe)",
+        allow_fail=not STRICT,
     )
 
-    # Create DMG from just the .app bundle, not the whole dist/ folder
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+def build_mac_dmg():
+    """Create a DMG from the .app bundle"""
+    if platform.system() != "Darwin":
+        print("⏭️  Skipping macOS DMG (not on macOS)")
+        return
+
     app_path = DIST_DIR / f"{PROJECT_NAME}.app"
     dmg_path = DIST_DIR / f"{PROJECT_NAME}_{VERSION}.dmg"
 
-    if app_path.exists():
-        dmg_src = BUILD_DIR / "dmg_staging"
-        if dmg_src.exists():
-            shutil.rmtree(dmg_src)
-        dmg_src.mkdir(parents=True)
-        shutil.copytree(app_path, dmg_src / f"{PROJECT_NAME}.app")
-
-        run_command(
-            f"hdiutil create -volname {PROJECT_NAME} -srcfolder {dmg_src} -ov -format UDZO {dmg_path}",
-            "Creating macOS DMG installer"
-        )
-    else:
+    if not app_path.exists():
         print(f"⚠️  {app_path} not found - PyInstaller may have produced a onedir build instead of .app")
         print("   Check that atum.spec builds a BUNDLE() for macOS.")
+        return
+
+    dmg_src = BUILD_DIR / "dmg_staging"
+    if dmg_src.exists():
+        shutil.rmtree(dmg_src)
+    dmg_src.mkdir(parents=True)
+
+    # symlinks=True keeps the internal symlinks of the .app bundle intact
+    shutil.copytree(app_path, dmg_src / app_path.name, symlinks=True)
+
+    # Drag-and-drop shortcut to /Applications
+    try:
+        (dmg_src / "Applications").symlink_to("/Applications")
+    except OSError:
+        pass
+
+    if dmg_path.exists():
+        dmg_path.unlink()
+
+    # hdiutil occasionally fails with "Resource busy" on CI runners -> retry
+    run_command(
+        ["hdiutil", "create", "-volname", PROJECT_NAME,
+         "-srcfolder", str(dmg_src), "-ov", "-format", "UDZO", str(dmg_path)],
+        "Creating macOS DMG installer",
+        allow_fail=not STRICT,
+        retries=3,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Linux
+# ---------------------------------------------------------------------------
+def _linux_onedir():
+    exe_dir = DIST_DIR / PROJECT_NAME
+    if not exe_dir.is_dir():
+        print(f"❌ {exe_dir} not found. atum.spec must create a onedir build (COLLECT), not onefile.")
+        sys.exit(1)
+    return exe_dir
+
 
 def build_linux_appimage():
     """Build Linux AppImage"""
     if platform.system() != "Linux":
-        print("⏭️  Skipping Linux build (not on Linux)")
+        print("⏭️  Skipping AppImage build (not on Linux)")
         return
 
-    run_command(
-        f"pyinstaller --noconfirm --clean {SPEC_FILE}",
-        "Building Linux executable"
-    )
+    if not shutil.which("appimagetool"):
+        print("⚠️  appimagetool not found on PATH - skipping AppImage")
+        print("   Download from: https://github.com/AppImage/AppImageKit/releases")
+        return
 
-    # Create AppImage directory structure
-    appdir = DIST_DIR / f"{PROJECT_NAME}.AppDir"
-    appdir.mkdir(exist_ok=True)
+    exe_dir = _linux_onedir()
 
-    # Copy built files
-    exe_path = DIST_DIR / PROJECT_NAME
-    shutil.copytree(exe_path, appdir / "usr" / "bin", dirs_exist_ok=True)
+    # AppDir lives in build/ so dist/ only contains deliverables
+    appdir = BUILD_DIR / f"{PROJECT_NAME}.AppDir"
+    if appdir.exists():
+        shutil.rmtree(appdir)
+    bin_dir = appdir / "usr" / "bin"
+    bin_dir.mkdir(parents=True)
+    shutil.copytree(exe_dir, bin_dir, dirs_exist_ok=True, symlinks=True)
 
-    # Create .desktop file
+    # .desktop file
     desktop_content = f"""[Desktop Entry]
 Type=Application
 Name={PROJECT_NAME}
 Comment=Activity Tracking Application
-Exec=AppRun
+Exec={PROJECT_NAME}
 Icon=atum
 Terminal=false
 Categories=Utility;
 """
     (appdir / f"{PROJECT_NAME}.desktop").write_text(desktop_content)
 
-    # Copy icon
+    # AppRun: required entry point of every AppImage
+    apprun = appdir / "AppRun"
+    apprun.write_text(
+        '#!/bin/sh\n'
+        'HERE="$(dirname "$(readlink -f "$0")")"\n'
+        f'exec "$HERE/usr/bin/{PROJECT_NAME}" "$@"\n'
+    )
+    os.chmod(apprun, 0o755)
+
+    # Icon (must be named like the Icon= entry: atum.png)
     icon_src = BUILD_DIR / "icon_512.png"
     if icon_src.exists():
         shutil.copy(icon_src, appdir / "atum.png")
-
-    # Create AppImage (requires appimagetool on PATH)
-    if shutil.which("appimagetool"):
-        run_command(
-            f"appimagetool {appdir} {DIST_DIR / f'{PROJECT_NAME}_{VERSION}.AppImage'}",
-            "Creating Linux AppImage",
-            allow_fail=True,
-        )
     else:
-        print("⚠️  appimagetool not found on PATH - skipping AppImage")
-        print("   Download from: https://github.com/AppImage/AppImageKit/releases")
+        print("⚠️  build/icon_512.png missing - AppImage will have no icon")
+
+    env = {**os.environ, "ARCH": APPIMAGE_ARCH, "APPIMAGE_EXTRACT_AND_RUN": "1"}
+    appimage_path = DIST_DIR / f"{PROJECT_NAME}_{VERSION}.AppImage"
+
+    run_command(
+        ["appimagetool", str(appdir), str(appimage_path)],
+        "Creating Linux AppImage",
+        allow_fail=not STRICT,
+        env=env,
+    )
+
 
 def build_linux_deb():
     """Build Debian package"""
@@ -219,21 +316,22 @@ def build_linux_deb():
         print("⚠️  dpkg-deb not found - skipping .deb (install with: apt install dpkg-dev)")
         return
 
-    # Create .deb structure
+    exe_src_dir = _linux_onedir()
+
     deb_root = BUILD_DIR / "atum-deb"
     if deb_root.exists():
         shutil.rmtree(deb_root)
-    deb_root.mkdir(exist_ok=True)
 
-    # Create DEBIAN directory
+    # DEBIAN/control
     debian_dir = deb_root / "DEBIAN"
-    debian_dir.mkdir(exist_ok=True)
-
-    # Create control file
+    debian_dir.mkdir(parents=True)
     control = f"""Package: atum
 Version: {VERSION}
-Architecture: amd64
-Maintainer: Your Name <you@example.com>
+Section: utils
+Priority: optional
+Architecture: {DEB_ARCH}
+Maintainer: {MAINTAINER}
+Depends: {", ".join(DEB_DEPENDS)}
 Description: Atum - Activity Tracking Application
  Monitor computer activity and capture body/hand/face motion
  Real-time tracking with local database
@@ -241,24 +339,22 @@ Description: Atum - Activity Tracking Application
 """
     (debian_dir / "control").write_text(control)
 
-    # Copy executable (whole onedir folder so dependent .so files come along)
-    exe_dir = deb_root / "usr" / "lib" / "atum"
-    exe_dir.mkdir(parents=True, exist_ok=True)
-    exe_src_dir = DIST_DIR / PROJECT_NAME
-    if exe_src_dir.exists():
-        shutil.copytree(exe_src_dir, exe_dir, dirs_exist_ok=True)
+    # Application files (whole onedir folder so dependent .so files come along)
+    lib_dir = deb_root / "usr" / "lib" / "atum"
+    lib_dir.mkdir(parents=True)
+    shutil.copytree(exe_src_dir, lib_dir, dirs_exist_ok=True, symlinks=True)
 
+    # Launcher in /usr/bin
     bin_dir = deb_root / "usr" / "bin"
-    bin_dir.mkdir(parents=True, exist_ok=True)
-    (bin_dir / "atum").write_text(f"#!/bin/sh\nexec /usr/lib/atum/{PROJECT_NAME} \"$@\"\n")
-    os.chmod(bin_dir / "atum", 0o755)
+    bin_dir.mkdir(parents=True)
+    launcher = bin_dir / "atum"
+    launcher.write_text(f'#!/bin/sh\nexec /usr/lib/atum/{PROJECT_NAME} "$@"\n')
+    os.chmod(launcher, 0o755)
 
-    # Copy icon and desktop file
-    share_dir = deb_root / "usr" / "share" / "applications"
-    share_dir.mkdir(parents=True, exist_ok=True)
-
-    desktop_file = share_dir / "atum.desktop"
-    desktop_content = f"""[Desktop Entry]
+    # Desktop entry
+    apps_dir = deb_root / "usr" / "share" / "applications"
+    apps_dir.mkdir(parents=True)
+    desktop_content = """[Desktop Entry]
 Type=Application
 Name=Atum
 Comment=Activity Tracking Application
@@ -267,52 +363,83 @@ Icon=atum
 Terminal=false
 Categories=Utility;
 """
-    desktop_file.write_text(desktop_content)
+    (apps_dir / "atum.desktop").write_text(desktop_content)
 
-    # Build deb package
+    # Icon
+    icon_src = BUILD_DIR / "icon_512.png"
+    if icon_src.exists():
+        icon_dir = deb_root / "usr" / "share" / "icons" / "hicolor" / "512x512" / "apps"
+        icon_dir.mkdir(parents=True)
+        shutil.copy(icon_src, icon_dir / "atum.png")
+    else:
+        print("⚠️  build/icon_512.png missing - .deb will have no icon")
+
+    deb_path = DIST_DIR / f"atum_{VERSION}_{DEB_ARCH}.deb"
     run_command(
-        f"dpkg-deb --build {deb_root} {DIST_DIR / f'atum_{VERSION}_amd64.deb'}",
+        ["dpkg-deb", "--root-owner-group", "--build", str(deb_root), str(deb_path)],
         "Creating Debian package",
-        allow_fail=True,
+        allow_fail=not STRICT,
     )
 
+
+# ---------------------------------------------------------------------------
+# Verification
+# ---------------------------------------------------------------------------
+def verify_outputs():
+    """List dist/ and make sure the expected installers exist (fatal in CI)"""
+    expected = {
+        "Windows": ["*.exe"],
+        "Darwin": ["*.dmg"],
+        "Linux": ["*.AppImage", "*.deb"],
+    }.get(platform.system(), [])
+
+    print(f"\n📂 Contents of {DIST_DIR}:")
+    for item in sorted(DIST_DIR.iterdir()):
+        size = f"{item.stat().st_size / 1_048_576:.1f} MB" if item.is_file() else "<dir>"
+        print(f"   {item.name}  ({size})")
+
+    missing = [pattern for pattern in expected if not list(DIST_DIR.glob(pattern))]
+    if missing:
+        print(f"\n⚠️  Expected installer(s) missing in {DIST_DIR}: {', '.join(missing)}")
+        if STRICT:
+            print("❌ Failing build because CI is strict about missing installers.")
+            sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 def main():
     """Main build orchestrator"""
-    print(f"\n{'='*60}")
+    os.chdir(ROOT)  # all relative paths refer to the repo root
+
+    print(f"\n{'=' * 60}")
     print(f"🔨 Building {PROJECT_NAME} v{VERSION}")
-    print(f"{'='*60}")
-    print(f"Platform: {platform.system()}")
+    print(f"{'=' * 60}")
+    print(f"Platform: {platform.system()} ({MACHINE})")
     print(f"Python: {sys.version.split()[0]}")
+    print(f"Strict mode: {STRICT}")
 
-    # Setup
     ensure_directories()
-
-    # Check if PyInstaller is installed
-    try:
-        import PyInstaller
-    except ImportError:
-        print("\n⚠️  PyInstaller not found. Installing...")
-        run_command("pip install pyinstaller", "Installing PyInstaller")
-
-    # Convert icon
+    ensure_pyinstaller()
     convert_icon(ICON_SOURCE)
+    run_pyinstaller()
 
-    # Build for current platform
     system = platform.system()
-
     if system == "Windows":
-        build_windows_exe()
+        build_windows_installer()
     elif system == "Darwin":
-        build_mac_app()
+        build_mac_dmg()
     elif system == "Linux":
         build_linux_appimage()
         build_linux_deb()
 
-    print(f"\n{'='*60}")
-    print(f"✅ Build completed!")
-    print(f"{'='*60}")
-    print(f"\n📂 Output files in: {DIST_DIR}")
-    print(f"   Run 'ls -la {DIST_DIR}' to see created installers\n")
+    verify_outputs()
+
+    print(f"\n{'=' * 60}")
+    print("✅ Build completed!")
+    print(f"{'=' * 60}\n")
+
 
 if __name__ == "__main__":
     main()
