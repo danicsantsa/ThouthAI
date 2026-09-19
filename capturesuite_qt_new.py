@@ -289,7 +289,7 @@ class AppSelectionDialog(QDialog):
         self.primary_checks = []
         self.checks = []
         self.app_group = QButtonGroup(self)
-        self.app_group.setExclusive(True)
+        self.app_group.setExclusive(False)
 
         primary_widget = QWidget()
         primary_grid = QGridLayout(primary_widget)
@@ -297,6 +297,7 @@ class AppSelectionDialog(QDialog):
         for i, name in enumerate(app_names[:4]):
             cb = AppCheck(name)
             cb.setChecked(name in checked_apps)
+            cb.toggled.connect(self._limit_selected_apps)
             self.app_group.addButton(cb)
             self.primary_checks.append(cb)
             self.checks.append(cb)
@@ -319,6 +320,7 @@ class AppSelectionDialog(QDialog):
             for i, name in enumerate(app_names[4:]):
                 cb = AppCheck(name)
                 cb.setChecked(name in checked_apps)
+                cb.toggled.connect(self._limit_selected_apps)
                 self.app_group.addButton(cb)
                 self.checks.append(cb)
                 extra_grid.addWidget(cb, i // 2, i % 2)
@@ -331,6 +333,13 @@ class AppSelectionDialog(QDialog):
         done_btn.clicked.connect(self.accept)
         buttons.addButton(done_btn, QDialogButtonBox.AcceptRole)
         layout.addWidget(buttons)
+
+    def _limit_selected_apps(self, checked):
+        if not checked:
+            return
+        selected = [button for button in self.app_group.buttons() if button.isChecked()]
+        if len(selected) > 3:
+            selected[-1].setChecked(False)
 
     def selected_apps(self):
         return [cb.text() for cb in self.checks if cb.isChecked()]
