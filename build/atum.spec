@@ -22,19 +22,23 @@ icon_path = icon_path if os.path.exists(icon_path) else None
 mac_icon_path = os.path.join(project_root, 'build', 'icon.icns')
 mac_icon_path = mac_icon_path if os.path.exists(mac_icon_path) else None
 
+datas = [
+    (os.path.join(project_root, 'efficientdet.tflite'), '.'),
+    (os.path.join(project_root, 'face_landmarker.task'), '.'),
+    (os.path.join(project_root, 'hand_landmarker.task'), '.'),
+    (os.path.join(project_root, 'pose_landmarker_lite.task'), '.'),
+    (os.path.join(project_root, 'atum.desktop'), '.'),
+]
+db_config_path = os.path.join(project_root, 'db_config.json')
+if os.path.exists(db_config_path):
+    datas.append((db_config_path, '.'))
+
 
 a = Analysis(
     [os.path.join(project_root, 'atum.py')],
     pathex=[project_root],
     binaries=[],
-    datas=[
-        (os.path.join(project_root, 'efficientdet.tflite'), '.'),
-        (os.path.join(project_root, 'face_landmarker.task'), '.'),
-        (os.path.join(project_root, 'hand_landmarker.task'), '.'),
-        (os.path.join(project_root, 'pose_landmarker_lite.task'), '.'),
-        (os.path.join(project_root, 'atum.desktop'), '.'),
-        (os.path.join(project_root, 'db_config.json'), '.'),
-    ],
+    datas=datas,
     hiddenimports=[
         'cv2',
         'mediapipe',
