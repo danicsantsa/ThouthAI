@@ -1,70 +1,44 @@
-# Secrets and local configuration
-gui_settings.json
-.env
-.env.*
-
-# Local runtime data
-recorded_videos/
-camera_preview.png
-*.csv
-*.mp4
-*.mp4.part.mp4
-
-# Python environments and caches
+# Virtuelle Umgebungen
 myenv/
 tracking_env/
 venv/
+
+# Python Cache
 __pycache__/
 *.py[cod]
 .pytest_cache/
 
-# Build output
+# Build-Artefakte (build/build.py, atum.spec, *.nsi bleiben im Repo!)
 dist/
 build/atum/
 build/*.toc
 build/*.pyz
 build/warn-*.txt
 build/xref-*.html
+build/icon.ico
+build/icon.icns
+build/icon_512.png
+build/dmg_staging/
+build/atum-deb/
+build/Atum.AppDir/
 *.spec.bak
 
-# IDE and OS files
-.vscode/
-.idea/
-.DS_Store
-
-# Local logs and generated exports
-*.log
-*.tmp
-
-# Unrelated personal/reference documents
-20201222_5004-b00-010201_web.pdf
-
-cat > .gitignore << 'EOF'
-# Virtuelle Umgebungen
-tracking_env/
-myenv/
-
-# Python Cache
-__pycache__/
-*.pyc
-
-# Build-Artefakte
-build/
-dist/
-
-# Generierte Daten/Logs
+# Generierte Daten / Logs
 *.csv
+*.mp4
+*.mp4.part.mp4
 recorded_videos/
 camera_preview.png
+*.log
+*.tmp
 
 # Konfiguration mit möglichen Zugangsdaten
 db_config.json
 
-# Modell-Dateien (ggf. groß, Git LFS verwenden)
-*.task
-*.tflite
-EOF
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
 
-git add .gitignore
-git commit -m "Add .gitignore"
-git push
+# Privates Referenzdokument
+20201222_5004-b00-010201_web.pdf
