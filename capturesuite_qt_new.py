@@ -2,7 +2,7 @@
 Atum — Qt (PySide6) layout
 -----------------------------------
 Instrument-panel look, segmented mode selector, session timer, camera
-signal strip, multi-app picker for Hyperfokus (as its own popup window),
+signal strip and camera-based Hyperfokus monitoring,
 transport controls, and live Supabase/backend status.
 
 Run:
@@ -13,14 +13,13 @@ Run:
 import sys
 import random
 import os
-from pathlib import Path
 import gui_settings
 import db_client
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QGridLayout, QLabel, QPushButton, QCheckBox, QFrame, QButtonGroup,
-    QSizePolicy, QDialog, QDialogButtonBox, QScrollArea, QVBoxLayout,
+    QLabel, QPushButton, QFrame, QButtonGroup,
+    QSizePolicy, QVBoxLayout,
 )
 from PySide6.QtGui import QFont
 
@@ -154,21 +153,6 @@ QLabel#hyperfocusMessage {{
     font-size: 12.5px;
     font-weight: 500;
 }}
-QCheckBox#appCheck {{
-    background: {PANEL_RAISED};
-    border: 1px solid {LINE};
-    border-radius: 7px;
-    padding: 9px 10px;
-    color: {TEXT};
-    font-size: 13px;
-}}
-QCheckBox#appCheck:hover {{
-    border: 1px solid {TEXT_FAINT};
-}}
-QCheckBox#appCheck::indicator {{
-    width: 14px;
-    height: 14px;
-}}
 QPushButton#transportBtn {{
     background: {PANEL_RAISED};
     border: 1px solid {LINE};
@@ -217,134 +201,6 @@ class Dot(QFrame):
         self.setStyleSheet(style)
 
 
-class AppCheck(QCheckBox):
-    def __init__(self, name: str):
-        super().__init__(name)
-        self.setObjectName("appCheck")
-
-
-class AppSelectionDialog(QDialog):
-    """Small popup window for choosing which apps stay available in Hyperfokus."""
-
-    DEFAULT_APP_NAMES = ["Notion", "VS Code", "Word", "PDF-Reader"]
-
-    @staticmethod
-    def _discover_apps():
-        """Collect installed desktop apps from the local system."""
-        seen = set()
-        apps = []
-        app_dirs = [
-            Path.home() / ".local" / "share" / "applications",
-            Path("/usr/share/applications"),
-            Path("/var/lib/snapd/desktop/applications"),
-        ]
-
-        for app_dir in app_dirs:
-            if not app_dir.exists():
-                continue
-            for desktop_file in sorted(app_dir.glob("*.desktop")):
-                try:
-                    content = desktop_file.read_text(encoding="utf-8", errors="ignore")
-                except OSError:
-                    continue
-                for line in content.splitlines():
-                    if not line.startswith("Name="):
-                        continue
-                    name = line.split("=", 1)[1].strip()
-                    if not name or name in seen:
-                        continue
-                    seen.add(name)
-                    apps.append(name)
-
-        if apps:
-            recent = [
-                "VS Code", "Firefox", "Terminal", "Notion", "Chrome", "Files", "LibreOffice Writer",
-                "Spotify", "Slack", "Microsoft Teams", "Discord"
-            ]
-            ordered = []
-            for name in recent:
-                if name in apps and name not in ordered:
-                    ordered.append(name)
-            for name in apps:
-                if name not in ordered:
-                    ordered.append(name)
-            return ordered[:80]
-        return list(AppSelectionDialog.DEFAULT_APP_NAMES)
-
-    def __init__(self, parent=None, checked_apps=None):
-        super().__init__(parent)
-        self.setWindowTitle("Apps für Hyperfokus")
-        self.setFixedWidth(360)
-        self.setMinimumHeight(200)
-        self.setStyleSheet(parent.styleSheet() if parent else "")
-
-        checked_apps = checked_apps or set()
-        app_names = self._discover_apps()
-
-        self.setLayout(QVBoxLayout())
-        layout = self.layout()
-        layout.setContentsMargins(20, 20, 20, 16)
-        layout.setSpacing(10)
-
-        self.primary_checks = []
-        self.checks = []
-        self.app_group = QButtonGroup(self)
-        self.app_group.setExclusive(False)
-
-        primary_widget = QWidget()
-        primary_grid = QGridLayout(primary_widget)
-        primary_grid.setSpacing(8)
-        for i, name in enumerate(app_names[:4]):
-            cb = AppCheck(name)
-            cb.setChecked(name in checked_apps)
-            cb.toggled.connect(self._limit_selected_apps)
-            self.app_group.addButton(cb)
-            self.primary_checks.append(cb)
-            self.checks.append(cb)
-            primary_grid.addWidget(cb, i // 2, i % 2)
-        layout.addWidget(primary_widget)
-
-        if len(app_names) > 4:
-            extra_label = QLabel("Weitere Apps")
-            extra_label.setStyleSheet("color: #7f8c8d; font-size: 11px; font-weight: 600;")
-            layout.addWidget(extra_label)
-
-            scroll = QScrollArea(self)
-            scroll.setWidgetResizable(True)
-            scroll.setMinimumHeight(140)
-            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-            extra_widget = QWidget()
-            extra_grid = QGridLayout(extra_widget)
-            extra_grid.setSpacing(8)
-            for i, name in enumerate(app_names[4:]):
-                cb = AppCheck(name)
-                cb.setChecked(name in checked_apps)
-                cb.toggled.connect(self._limit_selected_apps)
-                self.app_group.addButton(cb)
-                self.checks.append(cb)
-                extra_grid.addWidget(cb, i // 2, i % 2)
-            scroll.setWidget(extra_widget)
-            layout.addWidget(scroll)
-
-        buttons = QDialogButtonBox()
-        done_btn = QPushButton("Fertig")
-        done_btn.setObjectName("transportBtnPrimary")
-        done_btn.clicked.connect(self.accept)
-        buttons.addButton(done_btn, QDialogButtonBox.AcceptRole)
-        layout.addWidget(buttons)
-
-    def _limit_selected_apps(self, checked):
-        if not checked:
-            return
-        selected = [button for button in self.app_group.buttons() if button.isChecked()]
-        if len(selected) > 3:
-            selected[-1].setChecked(False)
-
-    def selected_apps(self):
-        return [cb.text() for cb in self.checks if cb.isChecked()]
-
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -354,7 +210,6 @@ class MainWindow(QMainWindow):
 
         self.seconds = 0
         self.session_mode = "standard"
-        self.selected_apps = []
         self.tracker = self._create_tracker()
 
         self.timer = QTimer(self)
@@ -484,10 +339,6 @@ class MainWindow(QMainWindow):
         self.signal_block = self._build_signal_block()
         layout.addWidget(self.signal_block)
 
-        # app picker (hyperfocus) — a button that opens its own window
-        self.app_picker = self._build_app_picker()
-        layout.addWidget(self.app_picker)
-
         self.hyperfocus_hint_box = self._build_hyperfocus_hint_box()
         self.hyperfocus_hint_box.setVisible(False)
         self.hyperfocus_message.setText("")
@@ -518,42 +369,6 @@ class MainWindow(QMainWindow):
         self.signal_timer.timeout.connect(self._animate_signal)
 
         return frame
-
-    def _build_app_picker(self) -> QWidget:
-        wrap = QWidget()
-        layout = QVBoxLayout(wrap)
-        layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(6)
-
-        self.app_picker_btn = QPushButton("Hyperfokus-App")
-        self.app_picker_btn.setObjectName("transportBtn")
-        self.app_picker_btn.setCursor(Qt.PointingHandCursor)
-        self.app_picker_btn.clicked.connect(self._open_app_dialog)
-        layout.addWidget(self.app_picker_btn)
-
-        self.app_hint = QLabel("")
-        self.app_hint.setObjectName("hintLabel")
-        self.app_hint.setWordWrap(True)
-        layout.addWidget(self.app_hint)
-
-        return wrap
-
-    def _open_app_dialog(self):
-        dialog = AppSelectionDialog(self, checked_apps=set(self.selected_apps))
-        if dialog.exec() == QDialog.Accepted:
-            self.selected_apps = dialog.selected_apps()
-            self._update_app_hint()
-
-    def _update_app_hint(self):
-        if self.selected_apps:
-            self.app_picker_btn.setText(
-                self.selected_apps[0] if len(self.selected_apps) == 1
-                else f"{len(self.selected_apps)} Apps"
-            )
-            self.app_hint.setText("")
-        else:
-            self.app_picker_btn.setText("Hyperfokus-App")
-            self.app_hint.setText("")
 
     def _camera_observation_message(
         self,
@@ -680,8 +495,6 @@ class MainWindow(QMainWindow):
         labels = {"standard": "Standard", "focus": "Fokus", "hyperfocus": "Hyperfokus"}
         if hasattr(self, "session_tag"):
             self.session_tag.setText(f"Modus: {labels[mode_key]}")
-        if hasattr(self, "app_picker"):
-            self.app_picker.setVisible(mode_key == "hyperfocus")
         if hasattr(self, "hyperfocus_hint_box"):
             self.hyperfocus_hint_box.setVisible(False)
             self.hyperfocus_message.setText("")
@@ -705,8 +518,6 @@ class MainWindow(QMainWindow):
         settings["db_flush_interval"] = settings.get("db_flush_interval", 2)
         settings["work_apps"] = settings.get("work_apps", "code")
         settings["non_work_apps"] = settings.get("non_work_apps", "spotify")
-        if self.session_mode == "hyperfocus":
-            settings["hyperfocus_app"] = ",".join(self.selected_apps) if self.selected_apps else settings.get("hyperfocus_app", "")
         gui_settings.save_settings(settings)
 
         if self.tracker is None:

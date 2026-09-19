@@ -2,9 +2,7 @@ import importlib
 import os
 import sys
 import unittest
-from unittest.mock import patch
 
-import activity_tracker
 import capturesuite_qt_new
 import track_all
 import tracking_gui
@@ -44,42 +42,17 @@ class SessionModeTests(unittest.TestCase):
         finally:
             sys.argv = original_argv
 
-    def test_hyperfocus_app_blocking_and_refocus(self):
-        self.assertTrue(activity_tracker.app_matches_allowed("code", "code"))
-        self.assertTrue(activity_tracker.app_matches_allowed("Visual Studio Code", "code"))
-        self.assertTrue(activity_tracker.app_matches_allowed("Firefox", "code,firefox"))
-        self.assertFalse(activity_tracker.app_matches_allowed("spotify", "code"))
-
-        with patch("activity_tracker.subprocess.run") as mock_run:
-            mock_run.return_value = None
-            activity_tracker.activate_allowed_hyperfocus_app("code")
-            self.assertTrue(mock_run.called)
-
-    def test_hyperfocus_keeps_multiple_selected_apps_allowed(self):
-        app = QApplication.instance() or QApplication([])
-        window = capturesuite_qt_new.MainWindow()
-        window.selected_apps = ["code", "firefox"]
-        with patch("capturesuite_qt_new.gui_settings.save_settings") as save_settings:
-            window.session_mode = "hyperfocus"
-            window._on_start()
-            saved = save_settings.call_args.args[0]
-            self.assertEqual(saved["hyperfocus_app"], "code,firefox")
-        window.tracker.stop()
-
     def test_qt_hyperfocus_mode_starts_with_standard_and_toggle(self):
         app = QApplication.instance() or QApplication([])
         window = capturesuite_qt_new.MainWindow()
         window.show()
         app.processEvents()
         self.assertTrue(window.mode_buttons["standard"].isChecked())
-        self.assertFalse(window.app_picker.isVisible())
         self.assertEqual(window.session_tag.text(), "Modus: Standard")
         window._on_mode_changed("hyperfocus")
         self.assertTrue(window.mode_buttons["hyperfocus"].isChecked())
-        self.assertTrue(window.app_picker.isVisible())
         self.assertEqual(window.session_tag.text(), "Modus: Hyperfokus")
         window._on_mode_changed("standard")
-        self.assertFalse(window.app_picker.isVisible())
 
     def test_mode_switch_stops_session_timer(self):
         app = QApplication.instance() or QApplication([])
@@ -117,36 +90,11 @@ class SessionModeTests(unittest.TestCase):
         window.tracker.stop()
 
         window._on_mode_changed("hyperfocus")
-        window.selected_apps = ["code"]
         window._on_start()
         self.assertEqual(window.session_mode, "hyperfocus")
         self.assertIsNotNone(window.tracker.proc)
         self.assertEqual(window.tracker.state, "running")
         window.tracker.stop()
-
-    def test_hyperfocus_dialog_lists_real_apps(self):
-        apps = capturesuite_qt_new.AppSelectionDialog._discover_apps()
-        self.assertTrue(len(apps) >= 4)
-        self.assertNotEqual(apps, ["Notion", "VS Code", "Word", "PDF-Reader"])
-
-    def test_hyperfocus_dialog_shows_only_four_visible_apps(self):
-        app = QApplication.instance() or QApplication([])
-        dialog = capturesuite_qt_new.AppSelectionDialog(None, checked_apps={"VS Code"})
-        app.processEvents()
-        self.assertEqual(len(dialog.primary_checks), 4)
-        self.assertGreaterEqual(len(dialog.checks), 4)
-        self.assertLess(len(dialog.primary_checks), len(dialog.checks))
-
-    def test_hyperfocus_dialog_allows_at_most_three_apps(self):
-        app = QApplication.instance() or QApplication([])
-        dialog = capturesuite_qt_new.AppSelectionDialog(None)
-        dialog.checks[0].setChecked(True)
-        dialog.checks[1].setChecked(True)
-        dialog.checks[2].setChecked(True)
-        dialog.checks[3].setChecked(True)
-        app.processEvents()
-        self.assertEqual(len(dialog.selected_apps()), 3)
-        self.assertFalse(dialog.checks[3].isChecked())
 
     def test_hyperfocus_box_is_hidden(self):
         app = QApplication.instance() or QApplication([])

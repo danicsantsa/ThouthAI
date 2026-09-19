@@ -725,15 +725,11 @@ def activity_worker(user_id, session_id, db_writer, stop_event, args, session_cl
             leerlauf = at.get_idle_seconds()
             status = "Leerlauf" if (leerlauf is not None and leerlauf >= at.IDLE_THRESHOLD_SECONDS) else "Aktiv"
 
-            if args.session_mode == "hyperfocus" and args.hyperfocus_app:
-                at.enforce_hyperfocus_app(info["app_name"], args.hyperfocus_app)
-
             mode_eval = evaluate_session_mode(
                 args.session_mode,
                 kategorie,
                 leerlauf,
                 info["app_name"],
-                allowed_app=args.hyperfocus_app,
                 phone_detected=runtime_state.get("phone_detected", False),
             )
             if mode_eval["alert"]:
@@ -862,8 +858,6 @@ def parse_args():
     parser.add_argument("--session-mode", type=str, default="standard",
                          choices=["standard", "focus", "hyperfocus"],
                          help="Aktiver Arbeitsmodus der Sitzung: standard, focus oder hyperfocus")
-    parser.add_argument("--hyperfocus-app", type=str, default="",
-                         help="Erlaubte Einzel-App im Hyperfocus-Modus, z.B. code, firefox oder chrome")
     parser.add_argument("--preview-window", action="store_true",
                          help="Zeigt zusätzlich ein eigenes OpenCV-Fenster an; standardmäßig deaktiviert, damit die App keine neue Kamera-Preview-Page öffnet.")
     return parser.parse_args()

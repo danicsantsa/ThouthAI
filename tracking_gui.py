@@ -19,7 +19,7 @@ import cv2
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QFont, QImageReader, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
+    QApplication, QDialog, QDialogButtonBox, QFormLayout,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
     QPlainTextEdit, QPushButton, QStackedWidget, QTabBar, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget, QHeaderView, QFrame,
@@ -178,8 +178,6 @@ class TrackingProcess:
                    "--work-apps", settings["work_apps"],
                    "--non-work-apps", settings["non_work_apps"],
                    "--session-mode", self.mode]
-        if self.mode == "hyperfocus" and settings.get("hyperfocus_app"):
-            command += ["--hyperfocus-app", settings["hyperfocus_app"]]
         if settings.get("device_name"):
             command += ["--device-name", settings["device_name"]]
         self.session_id = None
@@ -316,7 +314,6 @@ class HomeTab(QWidget):
         self._invalid_videos = set()
         self._preview_mtime = None
         self._focus_status_message = ""
-        self.hyperfocus_app_combo = None
         self._build_ui()
         self._load_settings_into_header()
         self._show_last_session_summary()
@@ -419,16 +416,6 @@ class HomeTab(QWidget):
         self.focus_status.setStyleSheet(f"color: {COLORS['muted']}; font-size: 12px;")
         readout_layout.addWidget(self.focus_status)
 
-        self.hyperfocus_label = QLabel("Erlaubte App im Hyperfokus")
-        self.hyperfocus_label.setVisible(False)
-        self.hyperfocus_label.setStyleSheet(f"color: {COLORS['muted']}; font-size: 12px;")
-        readout_layout.addWidget(self.hyperfocus_label)
-
-        self.hyperfocus_app_combo = QComboBox()
-        self.hyperfocus_app_combo.setVisible(False)
-        self.hyperfocus_app_combo.currentTextChanged.connect(self._on_hyperfocus_app_changed)
-        readout_layout.addWidget(self.hyperfocus_app_combo)
-
         buttons = QHBoxLayout()
         buttons.setSpacing(10)
         self.start_btn = QPushButton("Start")
@@ -447,7 +434,6 @@ class HomeTab(QWidget):
         buttons.addWidget(self.stop_btn)
         readout_layout.addLayout(buttons)
 
-        self._populate_hyperfocus_apps()
         self._update_focus_status_display()
         self._refresh_session_mode_buttons()
         self._sync_session_controls()
@@ -561,40 +547,6 @@ class HomeTab(QWidget):
         self.focus_status.setText(text)
         self.focus_status.setStyleSheet(f"color: {color}; font-size: 9pt;")
 
-    def _populate_hyperfocus_apps(self):
-        if self.hyperfocus_app_combo is None:
-            return
-        settings = gui_settings.load_settings()
-        apps = [item.strip() for item in str(settings.get("work_apps", "")).split(",") if item.strip()]
-        if not apps:
-            apps = ["code", "firefox", "chrome", "terminal", "slack"]
-        self.hyperfocus_app_combo.blockSignals(True)
-        self.hyperfocus_app_combo.clear()
-        self.hyperfocus_app_combo.addItem("Bitte App wählen", "")
-        for app in apps:
-            self.hyperfocus_app_combo.addItem(app, app)
-        current = settings.get("hyperfocus_app", "")
-        if current:
-            index = self.hyperfocus_app_combo.findData(current)
-            if index >= 0:
-                self.hyperfocus_app_combo.setCurrentIndex(index)
-        self.hyperfocus_app_combo.blockSignals(False)
-        self._sync_hyperfocus_controls()
-
-    def _sync_hyperfocus_controls(self):
-        if self.hyperfocus_app_combo is None:
-            return
-        is_hyperfocus = self.session_mode == "hyperfocus"
-        self.hyperfocus_label.setVisible(is_hyperfocus)
-        self.hyperfocus_app_combo.setVisible(is_hyperfocus)
-
-    def _on_hyperfocus_app_changed(self, value):
-        if not value:
-            return
-        settings = gui_settings.load_settings()
-        settings["hyperfocus_app"] = value
-        gui_settings.save_settings(settings)
-
     def _refresh_session_mode_buttons(self):
         for mode_name, button in self.mode_buttons.items():
             is_selected = mode_name == self.session_mode
@@ -610,7 +562,6 @@ class HomeTab(QWidget):
                     "padding: 8px 12px; font-weight: 600;"
                 )
         self.mode_label.setText(f"Modus: {SESSION_MODE_LABELS[self.session_mode]}")
-        self._sync_hyperfocus_controls()
         self._update_focus_status_display()
         if hasattr(self, "signal_panel"):
             self.signal_panel.setVisible(self.session_mode == "standard")
@@ -667,10 +618,6 @@ class HomeTab(QWidget):
         settings["session_mode"] = self.session_mode
         gui_settings.save_settings(settings)
         try:
-            if self.session_mode == "hyperfocus":
-                selected_app = self.hyperfocus_app_combo.currentData() if self.hyperfocus_app_combo is not None else ""
-                settings["hyperfocus_app"] = selected_app or settings.get("hyperfocus_app", "")
-                gui_settings.save_settings(settings)
             if self.tracker.is_paused():
                 self.tracker.resume()
                 self._session_started_at = datetime.datetime.now()
