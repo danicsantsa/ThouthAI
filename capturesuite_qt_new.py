@@ -288,6 +288,8 @@ class AppSelectionDialog(QDialog):
 
         self.primary_checks = []
         self.checks = []
+        self.app_group = QButtonGroup(self)
+        self.app_group.setExclusive(True)
 
         primary_widget = QWidget()
         primary_grid = QGridLayout(primary_widget)
@@ -295,6 +297,7 @@ class AppSelectionDialog(QDialog):
         for i, name in enumerate(app_names[:4]):
             cb = AppCheck(name)
             cb.setChecked(name in checked_apps)
+            self.app_group.addButton(cb)
             self.primary_checks.append(cb)
             self.checks.append(cb)
             primary_grid.addWidget(cb, i // 2, i % 2)
@@ -316,6 +319,7 @@ class AppSelectionDialog(QDialog):
             for i, name in enumerate(app_names[4:]):
                 cb = AppCheck(name)
                 cb.setChecked(name in checked_apps)
+                self.app_group.addButton(cb)
                 self.checks.append(cb)
                 extra_grid.addWidget(cb, i // 2, i % 2)
             scroll.setWidget(extra_widget)

@@ -137,6 +137,15 @@ class SessionModeTests(unittest.TestCase):
         self.assertGreaterEqual(len(dialog.checks), 4)
         self.assertLess(len(dialog.primary_checks), len(dialog.checks))
 
+    def test_hyperfocus_dialog_allows_only_one_app(self):
+        app = QApplication.instance() or QApplication([])
+        dialog = capturesuite_qt_new.AppSelectionDialog(None)
+        dialog.checks[0].setChecked(True)
+        dialog.checks[1].setChecked(True)
+        app.processEvents()
+        self.assertEqual(len(dialog.selected_apps()), 1)
+        self.assertEqual(dialog.selected_apps()[0], dialog.checks[1].text())
+
     def test_hyperfocus_box_is_hidden(self):
         app = QApplication.instance() or QApplication([])
         window = capturesuite_qt_new.MainWindow()
