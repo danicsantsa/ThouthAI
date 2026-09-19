@@ -85,6 +85,27 @@ jobs:
           PYTHONIOENCODING: "utf-8"
           APPIMAGE_EXTRACT_AND_RUN: "1"
 
+      - name: Validate Linux release files
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          test -d dist/Atum
+          test -n "$(find dist -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$(find dist -maxdepth 1 -name '*.AppImage' -print -quit)"
+
+      - name: Validate Windows release files
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path dist/Atum)) { throw "Missing Windows onedir output: dist/Atum" }
+          if (-not (Get-ChildItem dist -Filter *.exe)) { throw "Missing Windows installer (.exe)" }
+
+      - name: Validate macOS release files
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -euo pipefail
+          test -n "$(find dist -maxdepth 1 -name '*.dmg' -print -quit)"
+          test -d dist/Atum.app || test -d dist/Atum
+
       - name: Archive onedir build (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
