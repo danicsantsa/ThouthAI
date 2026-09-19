@@ -163,11 +163,11 @@ def activate_allowed_hyperfocus_app(allowed_app):
 
 
 def enforce_hyperfocus_app(current_app_name, allowed_app):
-    """Force focus back to the allowed app when the user leaves the hyperfocus app."""
+    """Force focus back to an allowed app when the user leaves the allowlist."""
     current_app_name = current_app_name or ""
     if not allowed_app or app_matches_allowed(current_app_name, allowed_app):
         return False
-    print(f"[Hyperfocus] App blockiert: '{current_app_name}' ist nicht erlaubt. Fokus wird auf '{allowed_app}' gesetzt.")
+    print(f"[Hyperfocus] App gesperrt: '{current_app_name}' ist nicht erlaubt. Erlaubt: '{allowed_app}'.")
     return activate_allowed_hyperfocus_app(allowed_app)
 
 

@@ -47,12 +47,24 @@ class SessionModeTests(unittest.TestCase):
     def test_hyperfocus_app_blocking_and_refocus(self):
         self.assertTrue(activity_tracker.app_matches_allowed("code", "code"))
         self.assertTrue(activity_tracker.app_matches_allowed("Visual Studio Code", "code"))
+        self.assertTrue(activity_tracker.app_matches_allowed("Firefox", "code,firefox"))
         self.assertFalse(activity_tracker.app_matches_allowed("spotify", "code"))
 
         with patch("activity_tracker.subprocess.run") as mock_run:
             mock_run.return_value = None
             activity_tracker.activate_allowed_hyperfocus_app("code")
             self.assertTrue(mock_run.called)
+
+    def test_hyperfocus_keeps_multiple_selected_apps_allowed(self):
+        app = QApplication.instance() or QApplication([])
+        window = capturesuite_qt_new.MainWindow()
+        window.selected_apps = ["code", "firefox"]
+        with patch("capturesuite_qt_new.gui_settings.save_settings") as save_settings:
+            window.session_mode = "hyperfocus"
+            window._on_start()
+            saved = save_settings.call_args.args[0]
+            self.assertEqual(saved["hyperfocus_app"], "code,firefox")
+        window.tracker.stop()
 
     def test_qt_hyperfocus_mode_starts_with_standard_and_toggle(self):
         app = QApplication.instance() or QApplication([])

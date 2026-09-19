@@ -693,7 +693,7 @@ class MainWindow(QMainWindow):
         settings["work_apps"] = settings.get("work_apps", "code")
         settings["non_work_apps"] = settings.get("non_work_apps", "spotify")
         if self.session_mode == "hyperfocus":
-            settings["hyperfocus_app"] = self.selected_apps[0] if self.selected_apps else settings.get("hyperfocus_app", "")
+            settings["hyperfocus_app"] = ",".join(self.selected_apps) if self.selected_apps else settings.get("hyperfocus_app", "")
         gui_settings.save_settings(settings)
 
         if self.tracker is None:

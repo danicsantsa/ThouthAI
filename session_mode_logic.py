@@ -64,7 +64,11 @@ def evaluate_session_mode(mode, app_category=None, idle_seconds=None, app_name=N
         base["recommendation"] = "Bitte kurz zurück zur Arbeit kommen."
     elif mode == "hyperfocus":
         if allowed_app_key:
-            app_matches = allowed_app_key in app_name_key or any(token in app_name_key for token in allowed_app_key.split())
+            allowed_tokens = [token.strip() for token in allowed_app_key.replace(";", ",").split(",") if token.strip()]
+            app_matches = any(
+                token in app_name_key or app_name_key in token
+                for token in allowed_tokens
+            )
             if not app_matches:
                 base["score"] -= 70
                 base["reason"] = f"Hyperfocus: Nur '{allowed_app_key}' ist erlaubt."
