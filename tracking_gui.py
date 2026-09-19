@@ -221,19 +221,29 @@ class TrackingProcess:
         return True
 
     def _read_output(self):
-        for line in self.proc.stdout:
-            line = line.rstrip("\n")
-            self.output_queue.put(line)
-            match = SESSION_ID_PATTERN.search(line)
-            if match:
-                self.session_id = match.group(1)
-        self.output_queue.put(None)
+        try:
+            if self.proc is None or self.proc.stdout is None:
+                self.output_queue.put(None)
+                return
+            for line in self.proc.stdout:
+                line = line.rstrip("\n")
+                self.output_queue.put(line)
+                match = SESSION_ID_PATTERN.search(line)
+                if match:
+                    self.session_id = match.group(1)
+        finally:
+            if self.proc is not None and self.proc.stdout is not None:
+                self.proc.stdout.close()
+            self.output_queue.put(None)
 
     def stop(self):
         if self.proc is None:
             self.state = "idle"
             return
         if self.proc.poll() is not None:
+            if self.proc.stdout is not None:
+                self.proc.stdout.close()
+            self.proc = None
             self.state = "idle"
             return
         try:
@@ -248,6 +258,9 @@ class TrackingProcess:
             self.proc.wait(timeout=8)
         except Exception:
             pass
+        if self.proc.stdout is not None:
+            self.proc.stdout.close()
+        self.proc = None
         self.state = "idle"
 
 

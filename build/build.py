@@ -166,6 +166,35 @@ def run_pyinstaller():
     )
 
 
+def ensure_appimagetool():
+    """Download appimagetool locally when the Linux build wants an AppImage."""
+    if platform.system() != "Linux":
+        return
+
+    tool = shutil.which("appimagetool")
+    if tool:
+        return
+
+    local_dir = Path.home() / ".local" / "bin"
+    local_dir.mkdir(parents=True, exist_ok=True)
+    tool_path = local_dir / "appimagetool"
+
+    if tool_path.exists():
+        os.environ["PATH"] = f"{local_dir}:{os.environ.get('PATH','')}"
+        return
+
+    url = "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+    print("\n⚠️  appimagetool not found. Downloading it automatically...")
+    try:
+        import urllib.request
+        urllib.request.urlretrieve(url, str(tool_path))
+        tool_path.chmod(0o755)
+        os.environ["PATH"] = f"{local_dir}:{os.environ.get('PATH','')}"
+        print(f"  ✅ Downloaded appimagetool to {tool_path}")
+    except Exception as exc:
+        print(f"  ⚠️  Could not download appimagetool automatically: {exc}")
+
+
 # ---------------------------------------------------------------------------
 # Windows
 # ---------------------------------------------------------------------------
@@ -252,12 +281,7 @@ def build_linux_appimage():
         print("⏭️  Skipping AppImage build (not on Linux)")
         return
 
-    if not shutil.which("appimagetool"):
-        print("⚠️  appimagetool not found on PATH - skipping AppImage")
-        print("   Download from: https://github.com/AppImage/AppImageKit/releases")
-        return
-
-    exe_dir = _linux_onedir()
+    ensure_appimagetool()
 
     # AppDir lives in build/ so dist/ only contains deliverables
     appdir = BUILD_DIR / f"{PROJECT_NAME}.AppDir"
