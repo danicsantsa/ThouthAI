@@ -30,13 +30,15 @@ Section "Install"
   
   ; Copy executable and files
   File /r "..\dist\Atum\*.*"
-  File "..\workspace-tracking-icon.png"
-  File "..\gui_settings.json"
-  File "..\db_config.json"
-  
+
+  ; Optional asset/config files: only copy if present
+  File /nonfatal "..\workspace-tracking-icon.png"
+  File /nonfatal "..\gui_settings.json"
+  File /nonfatal "..\db_config.json"
+
   ; Copy model files if they exist
-  File "..\*.task" 2>/dev/null
-  File "..\*.tflite" 2>/dev/null
+  File /nonfatal "..\*.task"
+  File /nonfatal "..\*.tflite"
   
   ; Create shortcuts
   CreateDirectory "$SMPROGRAMS\${APP_NAME}"
