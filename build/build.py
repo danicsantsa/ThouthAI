@@ -283,6 +283,8 @@ def build_linux_appimage():
 
     ensure_appimagetool()
 
+    exe_dir = _linux_onedir()
+
     # AppDir lives in build/ so dist/ only contains deliverables
     appdir = BUILD_DIR / f"{PROJECT_NAME}.AppDir"
     if appdir.exists():
