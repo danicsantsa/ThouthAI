@@ -78,6 +78,18 @@ jobs:
             fi
           done
 
+      - name: Restore database configuration
+        shell: bash
+        env:
+          ATUM_DB_CONFIG_JSON: ${{ secrets.ATUM_DB_CONFIG_JSON }}
+        run: |
+          if [ -z "$ATUM_DB_CONFIG_JSON" ]; then
+            echo "ERROR: GitHub secret ATUM_DB_CONFIG_JSON is not configured"
+            exit 1
+          fi
+          printf '%s' "$ATUM_DB_CONFIG_JSON" > db_config.json
+          python -m json.tool db_config.json >/dev/null
+
       - name: Build installer
         run: python build/build.py
         env:
